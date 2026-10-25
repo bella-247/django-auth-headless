@@ -1,4 +1,4 @@
-# django-auth-kit
+# django-auth-headless
 
 Reusable Django authentication built on django-allauth Headless.
 
@@ -13,7 +13,9 @@ https://github.com/bella-247/DjangoOAuth.
 ## Install
 
 ```bash
-pip install django-auth-kit
+pip install django-auth-headless
+# or
+uv add django-auth-headless
 ```
 
 The package requires Django 6.1, django-allauth with the `headless` and
@@ -162,6 +164,7 @@ for the `bella-247/django-auth-kit` repository with:
 
 - Workflow: `.github/workflows/publish.yml`
 - Environment: `pypi`
+- PyPI project: `django-auth-headless`
 
 Update the version in `pyproject.toml`, push a matching tag, and publish a
 GitHub Release for that tag. PyPI versions are immutable, so each release must

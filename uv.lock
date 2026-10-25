@@ -332,7 +332,7 @@ socialaccount = [
 ]
 
 [[package]]
-name = "django-auth-kit"
+name = "django-auth-headless"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

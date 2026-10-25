@@ -1,5 +1,5 @@
 [project]
-name = "django-auth-kit"
+name = "django-auth-headless"
 version = "0.1.0"
 description = "Reusable Django authentication with django-allauth Headless and OAuth providers."
 readme = "README.md"
