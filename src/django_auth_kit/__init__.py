@@ -1,0 +1,1 @@
+"""Reusable Django authentication configuration."""

@@ -1,0 +1,161 @@
+# django-auth-kit
+
+Reusable Django authentication built on django-allauth Headless.
+
+The first release focuses on Google OAuth, session authentication, CSRF/CORS
+configuration, and setup and verification commands. The package is designed
+for Django projects using any browser frontend. It does not include a frontend
+or example application.
+
+The original learning project, including its React frontend, is available at
+https://github.com/bella-247/DjangoOAuth.
+
+## Install
+
+```bash
+pip install django-auth-kit
+```
+
+The package requires Django 6.1, django-allauth with the `headless` and
+`socialaccount` extras, django-cors-headers, and python-dotenv.
+
+## Configure Django
+
+In `settings.py`, import the package settings from `django_auth_kit.conf` and
+assign them to the corresponding Django settings:
+
+```python
+from django_auth_kit.conf import *
+```
+
+Keep project-specific `SECRET_KEY`, `DEBUG`, `DATABASES`, `TEMPLATES`,
+`ROOT_URLCONF`, `WSGI_APPLICATION`, `STATIC_URL`, `ALLOWED_HOSTS`, and email
+settings in your project.
+
+The exported `INSTALLED_APPS` already includes `django_auth_kit`, so Django
+discovers the package and its management commands. Do not add it a second
+time.
+
+Add the package URLs to your project URL configuration:
+
+```python
+from django_auth_kit.urls import urlpatterns as auth_urlpatterns
+
+urlpatterns = [
+    *auth_urlpatterns,
+]
+```
+
+Run migrations after installing and configuring the package:
+
+```bash
+python manage.py migrate
+```
+
+## Environment
+
+Create a `.env` file beside `manage.py`:
+
+```dotenv
+DJANGO_FRONTEND_URL=http://localhost:5173
+DJANGO_CORS_ALLOWED_ORIGINS=http://localhost:5173
+DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:5173
+DJANGO_AUTH_PROVIDERS=google
+DJANGO_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+DJANGO_GOOGLE_CLIENT_SECRET=your-client-secret
+```
+
+Security settings are also environment-driven:
+
+```dotenv
+DJANGO_SECURE_SSL_REDIRECT=False
+DJANGO_SECURE_HSTS_SECONDS=0
+DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS=False
+DJANGO_SECURE_HSTS_PRELOAD=False
+DJANGO_SESSION_COOKIE_SECURE=False
+DJANGO_CSRF_COOKIE_SECURE=False
+DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+```
+
+Use secure cookies, HTTPS redirect, HSTS, and a production email backend in
+production.
+
+## Management commands
+
+The commands are available after `django_auth_kit` is included through the
+exported `INSTALLED_APPS` list and migrations have been applied.
+
+### Configure a provider
+
+`setup_oauth` creates or updates the database-backed `SocialApp`, associates it
+with the configured Site, and can write credentials to an env file.
+
+```bash
+# Interactive
+python manage.py setup_oauth
+
+# Non-interactive
+python manage.py setup_oauth \
+  --provider google \
+  --client-id "$DJANGO_GOOGLE_CLIENT_ID" \
+  --client-secret "$DJANGO_GOOGLE_CLIENT_SECRET" \
+  --domain localhost:8000
+
+# Also update an env file
+python manage.py setup_oauth --env-file .env
+```
+
+Options: `--provider`, `--client-id`, `--client-secret`, `--domain`, `--name`,
+and `--env-file`.
+
+### Verify configuration
+
+```bash
+python manage.py verify_oauth
+```
+
+This checks the Site, database `SocialApp` records, provider environment
+variables, and the allauth Headless configuration endpoint.
+
+Provider credentials have one source of truth: the database `SocialApp`.
+Environment variables supply credentials to `setup_oauth`; they are not also
+registered as settings-backed provider applications.
+
+## Endpoints
+
+The package includes:
+
+- `/_allauth/browser/v1/` — django-allauth Headless endpoints.
+- `/accounts/` — provider callback routes.
+- `/api/me` — authenticated current-user response.
+
+`GET /api/me` returns:
+
+```json
+{
+  "status": 200,
+  "data": {
+    "user": {
+      "id": 1,
+      "username": "example",
+      "email": "example@example.com"
+    }
+  }
+}
+```
+
+Unauthenticated requests return HTTP 401.
+
+## Development
+
+```bash
+uv sync --group dev
+uv run python manage.py test
+uv build
+```
+
+## Scope
+
+This is a Django-only package extracted from a Google OAuth learning project.
+Provider configuration is extensible, but Google OAuth is the documented and
+tested browser flow. The learning project is kept separate as an example.
