@@ -158,7 +158,7 @@ uv build
 
 Releases are published to PyPI by the `Publish package` GitHub Actions
 workflow when a GitHub Release is published. Configure PyPI Trusted Publishing
-for the `bella-247/DjangoOAuth` repository with:
+for the `bella-247/django-auth-kit` repository with:
 
 - Workflow: `.github/workflows/publish.yml`
 - Environment: `pypi`
