@@ -154,6 +154,19 @@ uv run python manage.py test
 uv build
 ```
 
+## Publishing
+
+Releases are published to PyPI by the `Publish package` GitHub Actions
+workflow when a GitHub Release is published. Configure PyPI Trusted Publishing
+for the `bella-247/DjangoOAuth` repository with:
+
+- Workflow: `.github/workflows/publish.yml`
+- Environment: `pypi`
+
+Update the version in `pyproject.toml`, push a matching tag, and publish a
+GitHub Release for that tag. PyPI versions are immutable, so each release must
+use a new version number.
+
 ## Scope
 
 This is a Django-only package extracted from a Google OAuth learning project.
