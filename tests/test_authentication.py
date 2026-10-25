@@ -7,10 +7,10 @@ from django.test import TestCase
 
 from allauth.socialaccount.models import SocialApp
 
-from django_auth_kit.conf import build
-from django_auth_kit.site_helpers import ensure_site
-from django_auth_kit.urls import urlpatterns as auth_urlpatterns
-from django_auth_kit.utils import load_env_file
+from django_auth_headless.conf import build
+from django_auth_headless.site_helpers import ensure_site
+from django_auth_headless.urls import urlpatterns as auth_urlpatterns
+from django_auth_headless.utils import load_env_file
 
 
 class AuthenticationPackageTests(TestCase):

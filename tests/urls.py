@@ -1,1 +1,1 @@
-from django_auth_kit.urls import urlpatterns
+from django_auth_headless.urls import urlpatterns

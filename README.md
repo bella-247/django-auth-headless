@@ -23,25 +23,25 @@ The package requires Django 6.1, django-allauth with the `headless` and
 
 ## Configure Django
 
-In `settings.py`, import the package settings from `django_auth_kit.conf` and
+In `settings.py`, import the package settings from `django_auth_headless.conf` and
 assign them to the corresponding Django settings:
 
 ```python
-from django_auth_kit.conf import *
+from django_auth_headless.conf import *
 ```
 
 Keep project-specific `SECRET_KEY`, `DEBUG`, `DATABASES`, `TEMPLATES`,
 `ROOT_URLCONF`, `WSGI_APPLICATION`, `STATIC_URL`, `ALLOWED_HOSTS`, and email
 settings in your project.
 
-The exported `INSTALLED_APPS` already includes `django_auth_kit`, so Django
+The exported `INSTALLED_APPS` already includes `django_auth_headless`, so Django
 discovers the package and its management commands. Do not add it a second
 time.
 
 Add the package URLs to your project URL configuration:
 
 ```python
-from django_auth_kit.urls import urlpatterns as auth_urlpatterns
+from django_auth_headless.urls import urlpatterns as auth_urlpatterns
 
 urlpatterns = [
     *auth_urlpatterns,
@@ -84,7 +84,7 @@ production.
 
 ## Management commands
 
-The commands are available after `django_auth_kit` is included through the
+The commands are available after `django_auth_headless` is included through the
 exported `INSTALLED_APPS` list and migrations have been applied.
 
 ### Configure a provider
@@ -160,7 +160,7 @@ uv build
 
 Releases are published to PyPI by the `Publish package` GitHub Actions
 workflow when a GitHub Release is published. Configure PyPI Trusted Publishing
-for the `bella-247/django-auth-kit` repository with:
+for the `bella-247/django-auth-headless` repository with:
 
 - Workflow: `.github/workflows/publish.yml`
 - Environment: `pypi`
