@@ -1,5 +1,6 @@
 import tempfile
 from datetime import timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from django.contrib.sites.models import Site
@@ -13,6 +14,7 @@ from django_auth_headless.site_helpers import ensure_site
 from django_auth_headless.urls import urlpatterns as auth_urlpatterns
 from django_auth_headless.utils import load_env_file
 from django_auth_headless.models import AccessToken
+from django_auth_headless.models import OAuthHandoffCode
 
 
 class AuthenticationPackageTests(TestCase):
@@ -67,6 +69,28 @@ class AuthenticationPackageTests(TestCase):
             HTTP_AUTHORIZATION=f"Bearer {raw_token}",
         )
         self.assertEqual(response.status_code, 200)
+
+    def test_authorization_code_exchange_is_single_use(self):
+        user = get_user_model().objects.create_user(
+            username="exchange-user",
+            password="password",
+        )
+        _, raw_code = OAuthHandoffCode.issue(user, timedelta(minutes=5))
+
+        response = self.client.post(
+            "/api/auth/exchange",
+            data={"code": raw_code},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access_token", response.json()["data"])
+
+        second_response = self.client.post(
+            "/api/auth/exchange",
+            data={"code": raw_code},
+            content_type="application/json",
+        )
+        self.assertEqual(second_response.status_code, 400)
 
     def test_expired_bearer_token_is_rejected(self):
         user = get_user_model().objects.create_user(username="expired-user")

@@ -9,7 +9,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from allauth.socialaccount.models import SocialAccount
 
-from .models import AccessToken
+from .models import AccessToken, OAuthHandoffCode
 
 
 def _bearer_user(request):
@@ -57,12 +57,50 @@ def token_callback(request):
     if not request.user.is_authenticated:
         return JsonResponse({"detail": "Authentication credentials were not provided."}, status=401)
 
-    lifetime = timedelta(
-        seconds=settings.DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS
+    _, raw_code = OAuthHandoffCode.issue(request.user, timedelta(minutes=5))
+    query = urlencode({"code": raw_code})
+    return redirect(
+        f"{settings.DJANGO_AUTH_FRONTEND_URL}/account/provider/callback#{query}"
     )
-    _, raw_token = AccessToken.issue(request.user, lifetime)
-    query = urlencode({"token": raw_token})
-    return redirect(f"{settings.DJANGO_AUTH_FRONTEND_URL}/account/provider/callback?{query}")
+
+
+@csrf_exempt
+@require_POST
+def exchange_code(request):
+    import json
+
+    try:
+        payload = json.loads(request.body)
+        raw_code = payload["code"]
+    except (TypeError, ValueError, KeyError):
+        return JsonResponse(
+            {"detail": "A valid authorization code is required."}, status=400
+        )
+
+    if not isinstance(raw_code, str) or not raw_code:
+        return JsonResponse(
+            {"detail": "A valid authorization code is required."}, status=400
+        )
+
+    user = OAuthHandoffCode.redeem(raw_code)
+    if user is None:
+        return JsonResponse(
+            {"detail": "The authorization code is invalid or expired."}, status=400
+        )
+
+    _, raw_token = AccessToken.issue(
+        user,
+        timedelta(seconds=settings.DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS),
+    )
+    return JsonResponse(
+        {
+            "status": 200,
+            "data": {
+                "access_token": raw_token,
+                "expires_in": settings.DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS,
+            },
+        }
+    )
 
 
 @csrf_exempt

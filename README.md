@@ -112,20 +112,24 @@ tokens.
 
 ## Separate frontend and backend hosts
 
-For unrelated hosts, use the package's database-backed bearer-token flow
-instead of browser session cookies:
+For unrelated hosts, use the package's authorization-code exchange instead of
+browser session cookies:
 
 1. Set `DJANGO_FRONTEND_URL` to the frontend origin.
 2. Configure the frontend to start OAuth with a callback to
    `/api/auth/callback`.
 3. Apply migrations so the package can store hashed, expiring tokens.
-4. After OAuth, Django redirects to the frontend with a short-lived token.
-5. Send it as `Authorization: Bearer <token>` to `/api/me`.
+4. After OAuth, Django redirects to the frontend with a short-lived,
+   single-use code in the URL fragment.
+5. The frontend posts the code to `/api/auth/exchange`.
+6. Django returns an access token, which the frontend sends as
+   `Authorization: Bearer <token>` to `/api/me`.
 
-The package stores only a hash of each token. Tokens expire according to
+The package stores only hashes of codes and tokens. Handoff codes expire after
+five minutes and can be redeemed once. Access tokens expire according to
 `DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS` and can be revoked with
 `POST /api/auth/token/revoke`. Frontends should keep the access token in
-memory, not localStorage or sessionStorage, and remove it from the URL
+memory, not localStorage or sessionStorage, and remove the fragment
 immediately after reading it.
 
 ## Management commands
