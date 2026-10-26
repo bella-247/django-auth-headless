@@ -80,6 +80,7 @@ DJANGO_SESSION_COOKIE_DOMAIN=
 DJANGO_SESSION_COOKIE_SAMESITE=Lax
 DJANGO_CSRF_COOKIE_SAMESITE=Lax
 DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS=3600
 ```
 
 Use secure cookies, HTTPS redirect, HSTS, and a production email backend in
@@ -108,6 +109,24 @@ browsers may still block third-party cookies. Use one custom parent domain or
 route both applications through one reverse proxy. This package intentionally
 uses browser sessions and does not silently replace them with client-side
 tokens.
+
+## Separate frontend and backend hosts
+
+For unrelated hosts, use the package's database-backed bearer-token flow
+instead of browser session cookies:
+
+1. Set `DJANGO_FRONTEND_URL` to the frontend origin.
+2. Configure the frontend to start OAuth with a callback to
+   `/api/auth/callback`.
+3. Apply migrations so the package can store hashed, expiring tokens.
+4. After OAuth, Django redirects to the frontend with a short-lived token.
+5. Send it as `Authorization: Bearer <token>` to `/api/me`.
+
+The package stores only a hash of each token. Tokens expire according to
+`DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS` and can be revoked with
+`POST /api/auth/token/revoke`. Frontends should keep the access token in
+memory, not localStorage or sessionStorage, and remove it from the URL
+immediately after reading it.
 
 ## Management commands
 

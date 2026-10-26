@@ -66,6 +66,9 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         env = dict(os.environ)
 
     frontend_url = env_str("DJANGO_FRONTEND_URL", "", env).rstrip("/")
+    access_token_lifetime = env_int("DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS", 3600, env)
+    if access_token_lifetime < 60:
+        raise ValueError("DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS must be at least 60")
     session_cookie_domain = env_str("DJANGO_SESSION_COOKIE_DOMAIN", "", env) or None
     session_cookie_samesite = env_str(
         "DJANGO_SESSION_COOKIE_SAMESITE", "Lax", env
@@ -144,6 +147,8 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         ),
         "SITE_ID": 1,
         "HEADLESS_ONLY": True,
+        "DJANGO_AUTH_FRONTEND_URL": frontend_url,
+        "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS": access_token_lifetime,
         "HEADLESS_FRONTEND_URLS": {
             "account_confirm_email": f"{frontend_url}/account/confirm-email/{{key}}",
             "account_reset_password": f"{frontend_url}/account/password/reset",
@@ -202,3 +207,7 @@ SECURE_HSTS_SECONDS = _settings["SECURE_HSTS_SECONDS"]
 SECURE_HSTS_INCLUDE_SUBDOMAINS = _settings["SECURE_HSTS_INCLUDE_SUBDOMAINS"]
 SECURE_HSTS_PRELOAD = _settings["SECURE_HSTS_PRELOAD"]
 SOCIALACCOUNT_PROVIDERS = _settings["SOCIALACCOUNT_PROVIDERS"]
+DJANGO_AUTH_FRONTEND_URL = _settings["DJANGO_AUTH_FRONTEND_URL"]
+DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS = _settings[
+    "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS"
+]

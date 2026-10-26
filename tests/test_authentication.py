@@ -1,4 +1,5 @@
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 
 from django.contrib.sites.models import Site
@@ -11,6 +12,7 @@ from django_auth_headless.conf import build
 from django_auth_headless.site_helpers import ensure_site
 from django_auth_headless.urls import urlpatterns as auth_urlpatterns
 from django_auth_headless.utils import load_env_file
+from django_auth_headless.models import AccessToken
 
 
 class AuthenticationPackageTests(TestCase):
@@ -52,6 +54,28 @@ class AuthenticationPackageTests(TestCase):
         response = self.client.get("/api/me")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["user"]["email"], "test@example.com")
+
+    def test_current_user_accepts_database_backed_bearer_token(self):
+        user = get_user_model().objects.create_user(
+            username="token-user",
+            email="token@example.com",
+            password="password",
+        )
+        _, raw_token = AccessToken.issue(user, timedelta(hours=1))
+        response = self.client.get(
+            "/api/me",
+            HTTP_AUTHORIZATION=f"Bearer {raw_token}",
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_expired_bearer_token_is_rejected(self):
+        user = get_user_model().objects.create_user(username="expired-user")
+        _, raw_token = AccessToken.issue(user, timedelta(seconds=-1))
+        response = self.client.get(
+            "/api/me",
+            HTTP_AUTHORIZATION=f"Bearer {raw_token}",
+        )
+        self.assertEqual(response.status_code, 401)
 
     def test_build_does_not_create_settings_backed_apps(self):
         settings = build({"DJANGO_AUTH_PROVIDERS": "google,github"})
