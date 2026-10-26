@@ -83,6 +83,7 @@ urlpatterns = [
 
 ```dotenv
 DJANGO_FRONTEND_URL=http://localhost:5173
+DJANGO_AUTH_MODE=session
 DJANGO_CORS_ALLOWED_ORIGINS=http://localhost:5173
 DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:5173
 DJANGO_AUTH_PROVIDERS=google
@@ -92,6 +93,12 @@ DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS=3600
 ```
 
 Do not commit the real `.env` file.
+
+Use `DJANGO_AUTH_MODE=session` for same-site deployments. For unrelated
+frontend and backend domains, set `DJANGO_AUTH_MODE=cross-domain` to enable
+the one-time authorization-code exchange and in-memory bearer tokens. The
+token callback, exchange, and revocation endpoints are disabled in session
+mode.
 
 ## Management commands
 

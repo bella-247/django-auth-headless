@@ -28,6 +28,7 @@ Create `.env` beside `manage.py`:
 
 ```dotenv
 DJANGO_FRONTEND_URL=http://localhost:5173
+DJANGO_AUTH_MODE=session
 DJANGO_CORS_ALLOWED_ORIGINS=http://localhost:5173
 DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:5173
 DJANGO_AUTH_PROVIDERS=google
@@ -57,7 +58,8 @@ source; environment credentials are setup inputs, not a second OAuth app.
 
 ## Separate frontend and backend hosts
 
-For unrelated domains, use the authorization-code exchange:
+For unrelated domains, set `DJANGO_AUTH_MODE=cross-domain` and use the
+authorization-code exchange:
 
 ```text
 GET  /api/auth/callback
@@ -69,3 +71,7 @@ POST /api/auth/token/revoke
 The redirect carries a five-minute, single-use code in the URL fragment. It
 does not carry the reusable access token. The frontend exchanges the code over
 HTTPS and keeps the returned token in memory.
+
+For same-site deployments, keep `DJANGO_AUTH_MODE=session`. The normal Django
+session cookie remains the authentication mechanism, and the token callback,
+exchange, and revocation endpoints are disabled.

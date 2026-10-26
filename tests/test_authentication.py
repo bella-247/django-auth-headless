@@ -106,6 +106,18 @@ class AuthenticationPackageTests(TestCase):
         self.assertNotIn("APP", settings["SOCIALACCOUNT_PROVIDERS"]["google"])
         self.assertNotIn("APP", settings["SOCIALACCOUNT_PROVIDERS"]["github"])
 
+    def test_build_defaults_to_session_mode(self):
+        settings = build({})
+        self.assertEqual(settings["DJANGO_AUTH_MODE"], "session")
+
+    def test_build_accepts_cross_domain_mode(self):
+        settings = build({"DJANGO_AUTH_MODE": "cross-domain"})
+        self.assertEqual(settings["DJANGO_AUTH_MODE"], "cross-domain")
+
+    def test_build_rejects_invalid_auth_mode(self):
+        with self.assertRaises(ValueError):
+            build({"DJANGO_AUTH_MODE": "token"})
+
     def test_build_supports_same_site_cookie_configuration(self):
         settings = build(
             {

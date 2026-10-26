@@ -66,6 +66,9 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         env = dict(os.environ)
 
     frontend_url = env_str("DJANGO_FRONTEND_URL", "", env).rstrip("/")
+    auth_mode = env_str("DJANGO_AUTH_MODE", "session", env).strip().lower()
+    if auth_mode not in {"session", "cross-domain"}:
+        raise ValueError("DJANGO_AUTH_MODE must be session or cross-domain")
     access_token_lifetime = env_int("DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS", 3600, env)
     if access_token_lifetime < 60:
         raise ValueError("DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS must be at least 60")
@@ -147,6 +150,7 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         ),
         "SITE_ID": 1,
         "HEADLESS_ONLY": True,
+        "DJANGO_AUTH_MODE": auth_mode,
         "DJANGO_AUTH_FRONTEND_URL": frontend_url,
         "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS": access_token_lifetime,
         "HEADLESS_FRONTEND_URLS": {
@@ -191,6 +195,7 @@ AUTHENTICATION_BACKENDS = _settings["AUTHENTICATION_BACKENDS"]
 SOCIALACCOUNT_ADAPTER = _settings["SOCIALACCOUNT_ADAPTER"]
 SITE_ID = _settings["SITE_ID"]
 HEADLESS_ONLY = _settings["HEADLESS_ONLY"]
+DJANGO_AUTH_MODE = _settings["DJANGO_AUTH_MODE"]
 HEADLESS_FRONTEND_URLS = _settings["HEADLESS_FRONTEND_URLS"]
 CORS_ALLOWED_ORIGINS = _settings["CORS_ALLOWED_ORIGINS"]
 CORS_ALLOW_CREDENTIALS = _settings["CORS_ALLOW_CREDENTIALS"]

@@ -30,9 +30,10 @@ Unauthenticated requests return HTTP 401.
 
 ## `GET /api/auth/callback`
 
-The separate-host callback creates a five-minute handoff code and redirects
-to `DJANGO_FRONTEND_URL` using a URL fragment. The code is not an access token
-and can be redeemed only once.
+When `DJANGO_AUTH_MODE=cross-domain`, the separate-host callback creates a
+five-minute handoff code and redirects to `DJANGO_FRONTEND_URL` using a URL
+fragment. The code is not an access token and can be redeemed only once.
+The endpoint returns HTTP 404 when `DJANGO_AUTH_MODE=session`.
 
 ## `POST /api/auth/exchange`
 
@@ -54,8 +55,10 @@ Success:
 }
 ```
 
-Invalid or expired codes return HTTP 400.
+Invalid or expired codes return HTTP 400. The endpoint returns HTTP 404 when
+`DJANGO_AUTH_MODE=session`.
 
 ## `POST /api/auth/token/revoke`
 
 Revokes the bearer token in the `Authorization` header and returns HTTP 204.
+The endpoint returns HTTP 404 when `DJANGO_AUTH_MODE=session`.

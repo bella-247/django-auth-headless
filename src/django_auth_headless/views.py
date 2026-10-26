@@ -12,6 +12,15 @@ from allauth.socialaccount.models import SocialAccount
 from .models import AccessToken, OAuthHandoffCode
 
 
+def _require_cross_domain_mode():
+    if settings.DJANGO_AUTH_MODE != "cross-domain":
+        return JsonResponse(
+            {"detail": "Cross-domain token authentication is not enabled."},
+            status=404,
+        )
+    return None
+
+
 def _bearer_user(request):
     authorization = request.headers.get("Authorization", "")
     if not authorization.startswith("Bearer "):
@@ -54,6 +63,9 @@ def current_user(request):
 
 @require_GET
 def token_callback(request):
+    mode_error = _require_cross_domain_mode()
+    if mode_error:
+        return mode_error
     if not request.user.is_authenticated:
         return JsonResponse({"detail": "Authentication credentials were not provided."}, status=401)
 
@@ -67,6 +79,9 @@ def token_callback(request):
 @csrf_exempt
 @require_POST
 def exchange_code(request):
+    mode_error = _require_cross_domain_mode()
+    if mode_error:
+        return mode_error
     import json
 
     try:
@@ -106,6 +121,9 @@ def exchange_code(request):
 @csrf_exempt
 @require_POST
 def revoke_token(request):
+    mode_error = _require_cross_domain_mode()
+    if mode_error:
+        return mode_error
     authorization = request.headers.get("Authorization", "")
     raw_token = authorization[7:].strip() if authorization.startswith("Bearer ") else ""
     token = AccessToken.objects.filter(
