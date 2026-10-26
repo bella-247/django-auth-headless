@@ -66,6 +66,28 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         env = dict(os.environ)
 
     frontend_url = env_str("DJANGO_FRONTEND_URL", "", env).rstrip("/")
+    session_cookie_domain = env_str("DJANGO_SESSION_COOKIE_DOMAIN", "", env) or None
+    session_cookie_samesite = env_str(
+        "DJANGO_SESSION_COOKIE_SAMESITE", "Lax", env
+    ).strip()
+    csrf_cookie_samesite = env_str(
+        "DJANGO_CSRF_COOKIE_SAMESITE", "Lax", env
+    ).strip()
+    valid_samesite_values = {"Strict", "Lax", "None"}
+    if session_cookie_samesite not in valid_samesite_values:
+        raise ValueError("DJANGO_SESSION_COOKIE_SAMESITE must be Strict, Lax, or None")
+    if csrf_cookie_samesite not in valid_samesite_values:
+        raise ValueError("DJANGO_CSRF_COOKIE_SAMESITE must be Strict, Lax, or None")
+    session_cookie_secure = env_bool("DJANGO_SESSION_COOKIE_SECURE", env=env)
+    csrf_cookie_secure = env_bool("DJANGO_CSRF_COOKIE_SECURE", env=env)
+    if session_cookie_samesite == "None" and not session_cookie_secure:
+        raise ValueError(
+            "DJANGO_SESSION_COOKIE_SECURE must be true when session SameSite is None"
+        )
+    if csrf_cookie_samesite == "None" and not csrf_cookie_secure:
+        raise ValueError(
+            "DJANGO_CSRF_COOKIE_SECURE must be true when CSRF SameSite is None"
+        )
 
     # Parse enabled providers from DJANGO_AUTH_PROVIDERS (comma-separated, default "google")
     providers_str = env_str("DJANGO_AUTH_PROVIDERS", "google", env)
@@ -134,12 +156,13 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         "CORS_ALLOWED_ORIGINS": env_list("DJANGO_CORS_ALLOWED_ORIGINS", env=env),
         "CORS_ALLOW_CREDENTIALS": True,
         "CSRF_TRUSTED_ORIGINS": env_list("DJANGO_CSRF_TRUSTED_ORIGINS", env=env),
-        "SESSION_COOKIE_SECURE": env_bool("DJANGO_SESSION_COOKIE_SECURE", env=env),
-        "CSRF_COOKIE_SECURE": env_bool("DJANGO_CSRF_COOKIE_SECURE", env=env),
+        "SESSION_COOKIE_SECURE": session_cookie_secure,
+        "CSRF_COOKIE_SECURE": csrf_cookie_secure,
+        "SESSION_COOKIE_DOMAIN": session_cookie_domain,
         "SESSION_COOKIE_HTTPONLY": True,
         "CSRF_COOKIE_HTTPONLY": False,
-        "SESSION_COOKIE_SAMESITE": "Lax",
-        "CSRF_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SAMESITE": session_cookie_samesite,
+        "CSRF_COOKIE_SAMESITE": csrf_cookie_samesite,
         "SECURE_CONTENT_TYPE_NOSNIFF": True,
         "SECURE_SSL_REDIRECT": env_bool("DJANGO_SECURE_SSL_REDIRECT", env=env),
         "SECURE_HSTS_SECONDS": env_int("DJANGO_SECURE_HSTS_SECONDS", env=env),
@@ -168,6 +191,7 @@ CORS_ALLOW_CREDENTIALS = _settings["CORS_ALLOW_CREDENTIALS"]
 CSRF_TRUSTED_ORIGINS = _settings["CSRF_TRUSTED_ORIGINS"]
 SESSION_COOKIE_SECURE = _settings["SESSION_COOKIE_SECURE"]
 CSRF_COOKIE_SECURE = _settings["CSRF_COOKIE_SECURE"]
+SESSION_COOKIE_DOMAIN = _settings["SESSION_COOKIE_DOMAIN"]
 SESSION_COOKIE_HTTPONLY = _settings["SESSION_COOKIE_HTTPONLY"]
 CSRF_COOKIE_HTTPONLY = _settings["CSRF_COOKIE_HTTPONLY"]
 SESSION_COOKIE_SAMESITE = _settings["SESSION_COOKIE_SAMESITE"]

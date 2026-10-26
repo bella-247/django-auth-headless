@@ -76,11 +76,38 @@ DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS=False
 DJANGO_SECURE_HSTS_PRELOAD=False
 DJANGO_SESSION_COOKIE_SECURE=False
 DJANGO_CSRF_COOKIE_SECURE=False
+DJANGO_SESSION_COOKIE_DOMAIN=
+DJANGO_SESSION_COOKIE_SAMESITE=Lax
+DJANGO_CSRF_COOKIE_SAMESITE=Lax
 DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 ```
 
 Use secure cookies, HTTPS redirect, HSTS, and a production email backend in
 production.
+
+### Production domain routing
+
+The default `Lax` cookies work when the frontend and backend are same-site,
+such as `app.example.com` and `api.example.com`. For that deployment, set:
+
+```dotenv
+DJANGO_SESSION_COOKIE_DOMAIN=.example.com
+DJANGO_SESSION_COOKIE_SECURE=True
+DJANGO_CSRF_COOKIE_SECURE=True
+DJANGO_CSRF_TRUSTED_ORIGINS=https://app.example.com
+DJANGO_CORS_ALLOWED_ORIGINS=https://app.example.com
+```
+
+The leading dot allows the session cookie to be sent to both subdomains.
+Never set it to a domain you do not control.
+
+If the frontend and backend are unrelated sites, such as
+`myfrontend.vercel.app` and `mybackend.railway.app`, `SESSION_COOKIE_DOMAIN`
+cannot bridge them. `SameSite=None` additionally requires `Secure`, and
+browsers may still block third-party cookies. Use one custom parent domain or
+route both applications through one reverse proxy. This package intentionally
+uses browser sessions and does not silently replace them with client-side
+tokens.
 
 ## Management commands
 

@@ -58,6 +58,27 @@ class AuthenticationPackageTests(TestCase):
         self.assertNotIn("APP", settings["SOCIALACCOUNT_PROVIDERS"]["google"])
         self.assertNotIn("APP", settings["SOCIALACCOUNT_PROVIDERS"]["github"])
 
+    def test_build_supports_same_site_cookie_configuration(self):
+        settings = build(
+            {
+                "DJANGO_SESSION_COOKIE_DOMAIN": ".example.com",
+                "DJANGO_SESSION_COOKIE_SECURE": "true",
+                "DJANGO_CSRF_COOKIE_SECURE": "true",
+                "DJANGO_SESSION_COOKIE_SAMESITE": "Lax",
+                "DJANGO_CSRF_COOKIE_SAMESITE": "Lax",
+            }
+        )
+        self.assertEqual(settings["SESSION_COOKIE_DOMAIN"], ".example.com")
+        self.assertEqual(settings["SESSION_COOKIE_SAMESITE"], "Lax")
+
+    def test_build_rejects_invalid_samesite_value(self):
+        with self.assertRaises(ValueError):
+            build({"DJANGO_SESSION_COOKIE_SAMESITE": "invalid"})
+
+    def test_build_requires_secure_cookie_for_samesite_none(self):
+        with self.assertRaises(ValueError):
+            build({"DJANGO_SESSION_COOKIE_SAMESITE": "None"})
+
     def test_custom_env_file(self):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / "custom.env"
