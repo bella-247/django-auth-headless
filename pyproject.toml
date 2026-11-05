@@ -1,6 +1,6 @@
 [project]
 name = "django-auth-headless"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reusable Django authentication with django-allauth Headless and OAuth providers."
 readme = "README.md"
 requires-python = ">=3.13"
