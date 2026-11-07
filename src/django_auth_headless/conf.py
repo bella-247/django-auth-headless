@@ -132,28 +132,9 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         }
 
     return {
-        "INSTALLED_APPS": [
-            "django.contrib.admin",
-            "django.contrib.auth",
-            "django.contrib.contenttypes",
-            "django.contrib.sessions",
-            "django.contrib.messages",
-            "django.contrib.staticfiles",
-            "django.contrib.sites",
-            "corsheaders",
-            *AUTH_APPS,
-        ],
-        "MIDDLEWARE": [
-            CORS_MIDDLEWARE,
-            "django.middleware.security.SecurityMiddleware",
-            "django.contrib.sessions.middleware.SessionMiddleware",
-            "django.middleware.common.CommonMiddleware",
-            "django.middleware.csrf.CsrfViewMiddleware",
-            "django.contrib.auth.middleware.AuthenticationMiddleware",
-            *AUTH_MIDDLEWARE,
-            "django.contrib.messages.middleware.MessageMiddleware",
-            "django.middleware.clickjacking.XFrameOptionsMiddleware",
-        ],
+        "AUTH_APPS": AUTH_APPS,
+        "AUTH_MIDDLEWARE": AUTH_MIDDLEWARE,
+        "CORS_MIDDLEWARE": CORS_MIDDLEWARE,
         "AUTHENTICATION_BACKENDS": [
             "django.contrib.auth.backends.ModelBackend",
             "allauth.account.auth_backends.AuthenticationBackend",
@@ -185,14 +166,6 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         "CSRF_COOKIE_HTTPONLY": False,
         "SESSION_COOKIE_SAMESITE": session_cookie_samesite,
         "CSRF_COOKIE_SAMESITE": csrf_cookie_samesite,
-        "SECURE_CONTENT_TYPE_NOSNIFF": True,
-        "SECURE_REFERRER_POLICY": "no-referrer",
-        "SECURE_SSL_REDIRECT": env_bool("DJANGO_SECURE_SSL_REDIRECT", env=env),
-        "SECURE_HSTS_SECONDS": env_int("DJANGO_SECURE_HSTS_SECONDS", env=env),
-        "SECURE_HSTS_INCLUDE_SUBDOMAINS": env_bool(
-            "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", env=env
-        ),
-        "SECURE_HSTS_PRELOAD": env_bool("DJANGO_SECURE_HSTS_PRELOAD", env=env),
         "SOCIALACCOUNT_PROVIDERS": socialaccount_providers,
     }
 
@@ -218,12 +191,6 @@ SESSION_COOKIE_HTTPONLY = _settings["SESSION_COOKIE_HTTPONLY"]
 CSRF_COOKIE_HTTPONLY = _settings["CSRF_COOKIE_HTTPONLY"]
 SESSION_COOKIE_SAMESITE = _settings["SESSION_COOKIE_SAMESITE"]
 CSRF_COOKIE_SAMESITE = _settings["CSRF_COOKIE_SAMESITE"]
-SECURE_CONTENT_TYPE_NOSNIFF = _settings["SECURE_CONTENT_TYPE_NOSNIFF"]
-SECURE_REFERRER_POLICY = _settings["SECURE_REFERRER_POLICY"]
-SECURE_SSL_REDIRECT = _settings["SECURE_SSL_REDIRECT"]
-SECURE_HSTS_SECONDS = _settings["SECURE_HSTS_SECONDS"]
-SECURE_HSTS_INCLUDE_SUBDOMAINS = _settings["SECURE_HSTS_INCLUDE_SUBDOMAINS"]
-SECURE_HSTS_PRELOAD = _settings["SECURE_HSTS_PRELOAD"]
 SOCIALACCOUNT_PROVIDERS = _settings["SOCIALACCOUNT_PROVIDERS"]
 DJANGO_AUTH_FRONTEND_URL = _settings["DJANGO_AUTH_FRONTEND_URL"]
 DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS = _settings[
