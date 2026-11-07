@@ -31,7 +31,6 @@ AUTH_APPS = [
     "allauth.socialaccount.providers.gitlab",
     "allauth.socialaccount.providers.microsoft",
     "allauth.headless",
-    "corsheaders",
     AUTHENTICATION_PACKAGE,
 ]
 
@@ -39,6 +38,8 @@ AUTH_MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     f"{AUTHENTICATION_PACKAGE}.middleware.BearerTokenMiddleware",
 ]
+
+CORS_MIDDLEWARE = "corsheaders.middleware.CorsMiddleware"
 
 
 # Provider configurations - defines required env vars per provider
@@ -138,10 +139,11 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
             "django.contrib.messages",
             "django.contrib.staticfiles",
             "django.contrib.sites",
+            "corsheaders",
             *AUTH_APPS,
         ],
         "MIDDLEWARE": [
-            "corsheaders.middleware.CorsMiddleware",
+            CORS_MIDDLEWARE,
             "django.middleware.security.SecurityMiddleware",
             "django.contrib.sessions.middleware.SessionMiddleware",
             "django.middleware.common.CommonMiddleware",
