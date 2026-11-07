@@ -9,10 +9,22 @@ class AuthenticationSocialAccountAdapter(DefaultSocialAccountAdapter):
 
     def pre_social_login(self, request, sociallogin: SocialLogin) -> None:
         user = sociallogin.user
-        provider_email = user.email or sociallogin.account.extra_data.get("email", "")
+        email_getter = getattr(user, "get_email_field_name", None)
+        email_field = email_getter() if callable(email_getter) else "email"
 
-        if not user.email and isinstance(provider_email, str) and provider_email:
-            user.email = provider_email
-            user.save(update_fields=["email"])
+        if hasattr(user, email_field):
+            current_email = getattr(user, email_field, "")
+            extra_data = (
+                getattr(getattr(sociallogin, "account", None), "extra_data", {}) or {}
+            )
+            provider_email = current_email or extra_data.get("email", "")
+
+            if not current_email and isinstance(provider_email, str) and provider_email:
+                setattr(user, email_field, provider_email)
+                if getattr(user, "pk", None) is not None:
+                    try:
+                        user.save(update_fields=[email_field])
+                    except Exception:
+                        pass
 
         super().pre_social_login(request, sociallogin)
