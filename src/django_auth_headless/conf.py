@@ -21,6 +21,25 @@ from .utils import (
 
 AUTHENTICATION_PACKAGE = __package__
 
+# Modular application and middleware lists for unpacking into settings.py
+AUTH_APPS = [
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.github",
+    "allauth.socialaccount.providers.gitlab",
+    "allauth.socialaccount.providers.microsoft",
+    "allauth.headless",
+    "corsheaders",
+    AUTHENTICATION_PACKAGE,
+]
+
+AUTH_MIDDLEWARE = [
+    "allauth.account.middleware.AccountMiddleware",
+    f"{AUTHENTICATION_PACKAGE}.middleware.BearerTokenMiddleware",
+]
+
 
 # Provider configurations - defines required env vars per provider
 PROVIDER_CONFIGS = {
@@ -119,16 +138,7 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
             "django.contrib.messages",
             "django.contrib.staticfiles",
             "django.contrib.sites",
-            "allauth",
-            "allauth.account",
-            "allauth.socialaccount",
-            "allauth.socialaccount.providers.google",
-            "allauth.socialaccount.providers.github",
-            "allauth.socialaccount.providers.gitlab",
-            "allauth.socialaccount.providers.microsoft",
-            "allauth.headless",
-            "corsheaders",
-            AUTHENTICATION_PACKAGE,
+            *AUTH_APPS,
         ],
         "MIDDLEWARE": [
             "corsheaders.middleware.CorsMiddleware",
@@ -137,7 +147,7 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
             "django.middleware.common.CommonMiddleware",
             "django.middleware.csrf.CsrfViewMiddleware",
             "django.contrib.auth.middleware.AuthenticationMiddleware",
-            "allauth.account.middleware.AccountMiddleware",
+            *AUTH_MIDDLEWARE,
             "django.contrib.messages.middleware.MessageMiddleware",
             "django.middleware.clickjacking.XFrameOptionsMiddleware",
         ],
