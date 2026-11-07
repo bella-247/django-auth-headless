@@ -31,6 +31,7 @@ AUTH_APPS = [
     "allauth.socialaccount.providers.gitlab",
     "allauth.socialaccount.providers.microsoft",
     "allauth.headless",
+    "corsheaders",
     AUTHENTICATION_PACKAGE,
 ]
 
