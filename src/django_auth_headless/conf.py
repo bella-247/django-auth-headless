@@ -201,9 +201,7 @@ def build(env: Mapping[str, str] | None = None) -> dict[str, Any]:
 load_env_file()
 _settings = build()
 
-# Export everything so `from .conf import *` works
-INSTALLED_APPS = _settings["INSTALLED_APPS"]
-MIDDLEWARE = _settings["MIDDLEWARE"]
+# Export auth-specific configuration (developers unpack *AUTH_APPS and *AUTH_MIDDLEWARE)
 AUTHENTICATION_BACKENDS = _settings["AUTHENTICATION_BACKENDS"]
 SOCIALACCOUNT_ADAPTER = _settings["SOCIALACCOUNT_ADAPTER"]
 SITE_ID = _settings["SITE_ID"]
