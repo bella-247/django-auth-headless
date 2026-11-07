@@ -25,3 +25,4 @@ class BearerTokenMiddleware:
                         request.user = authenticated_user
 
         return self.get_response(request)
+

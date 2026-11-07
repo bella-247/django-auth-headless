@@ -48,3 +48,4 @@ class BearerTokenMiddlewareTests(TestCase):
         request.user = self.user
         self.middleware(request)
         self.assertEqual(request.user, self.user)
+
