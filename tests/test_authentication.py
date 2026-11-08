@@ -156,3 +156,149 @@ class AuthenticationPackageTests(TestCase):
         updated = ensure_site("new.example", "New")
         self.assertEqual(updated.pk, 1)
         self.assertEqual(updated.domain, "new.example")
+
+    def test_build_defaults_for_security_controls(self):
+        settings = build({})
+        self.assertEqual(settings["ACCOUNT_EMAIL_VERIFICATION"], "mandatory")
+        self.assertFalse(settings["SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT"])
+
+    def test_build_with_django_auth_config_dict(self):
+        config = {
+            "FRONTEND_URL": "http://frontend.example.com",
+            "MODE": "cross-domain",
+            "PROVIDERS": ["google", "github"],
+            "EMAIL_VERIFICATION": "optional",
+            "EMAIL_AUTO_CONNECT": True,
+            "ACCESS_TOKEN_LIFETIME_SECONDS": 7200,
+            "USER_SERIALIZER": "myproject.serializers.custom_user",
+        }
+        settings = build(config=config)
+        self.assertEqual(settings["DJANGO_AUTH_FRONTEND_URL"], "http://frontend.example.com")
+        self.assertEqual(settings["DJANGO_AUTH_MODE"], "cross-domain")
+        self.assertEqual(settings["DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS"], 7200)
+        self.assertEqual(settings["ACCOUNT_EMAIL_VERIFICATION"], "optional")
+        self.assertTrue(settings["SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT"])
+        self.assertIn("google", settings["SOCIALACCOUNT_PROVIDERS"])
+        self.assertIn("github", settings["SOCIALACCOUNT_PROVIDERS"])
+        self.assertEqual(
+            settings["HEADLESS_FRONTEND_URLS"]["account_signup"],
+            "http://frontend.example.com/account/signup",
+        )
+        self.assertEqual(settings["DJANGO_AUTH_USER_SERIALIZER"], "myproject.serializers.custom_user")
+
+    def test_build_rejects_invalid_email_verification(self):
+        with self.assertRaises(ValueError):
+            build(config={"EMAIL_VERIFICATION": "invalid_setting"})
+
+    def test_build_accepts_providers_as_comma_separated_string(self):
+        settings = build(config={"PROVIDERS": "google, gitlab"})
+        self.assertIn("google", settings["SOCIALACCOUNT_PROVIDERS"])
+        self.assertIn("gitlab", settings["SOCIALACCOUNT_PROVIDERS"])
+        self.assertNotIn("github", settings["SOCIALACCOUNT_PROVIDERS"])
+
+    def test_get_setting_resolves_from_django_auth_dict(self):
+        from django_auth_headless.conf import get_setting
+        from django.test import override_settings
+
+        with override_settings(DJANGO_AUTH={"MODE": "cross-domain", "FRONTEND_URL": "http://override.test"}):
+            self.assertEqual(get_setting("MODE"), "cross-domain")
+            self.assertEqual(get_setting("FRONTEND_URL"), "http://override.test")
+            self.assertEqual(get_setting("NON_EXISTENT", default="fallback"), "fallback")
+
+    def test_app_config_ready_populates_settings_from_django_auth(self):
+        from django.apps import apps
+        from django.conf import settings as django_settings
+        from django.test import override_settings
+
+        app_config = apps.get_app_config("django_auth_headless")
+        with override_settings(
+            DJANGO_AUTH={
+                "FRONTEND_URL": "http://auto-app.test",
+                "MODE": "cross-domain",
+                "EMAIL_VERIFICATION": "mandatory",
+                "EMAIL_AUTO_CONNECT": False,
+                "PROVIDERS": ["google"],
+            }
+        ):
+            # Simulate ready()
+            app_config.ready()
+            self.assertEqual(django_settings.ACCOUNT_EMAIL_VERIFICATION, "mandatory")
+            self.assertFalse(django_settings.SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT)
+            self.assertIn("google", django_settings.SOCIALACCOUNT_PROVIDERS)
+            self.assertEqual(
+                django_settings.HEADLESS_FRONTEND_URLS["account_signup"],
+                "http://auto-app.test/account/signup",
+            )
+
+    def test_token_callback_uses_django_auth_frontend_url(self):
+        from django.test import override_settings
+
+        user = get_user_model().objects.create_user(
+            username="callback-tester", password="password"
+        )
+        self.client.force_login(user)
+        with override_settings(
+            DJANGO_AUTH={
+                "MODE": "cross-domain",
+                "FRONTEND_URL": "https://frontend.custom.org",
+            }
+        ):
+            response = self.client.get("/api/auth/callback")
+            self.assertEqual(response.status_code, 302)
+            self.assertTrue(
+                response["Location"].startswith("https://frontend.custom.org/account/provider/callback#code=")
+            )
+
+    def test_exchange_code_uses_django_auth_token_lifetime(self):
+        from django.test import override_settings
+
+        user = get_user_model().objects.create_user(
+            username="exchange-tester", password="password"
+        )
+        _, raw_code = OAuthHandoffCode.issue(user, timedelta(minutes=5))
+        with override_settings(
+            DJANGO_AUTH={
+                "MODE": "cross-domain",
+                "ACCESS_TOKEN_LIFETIME_SECONDS": 1800,
+            }
+        ):
+            response = self.client.post(
+                "/api/auth/exchange",
+                data={"code": raw_code},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["data"]["expires_in"], 1800)
+
+    def test_verify_oauth_management_command(self):
+        from io import StringIO
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command("verify_oauth", stdout=out)
+        output = out.getvalue()
+        self.assertIn("OAuth Configuration Verification", output)
+        self.assertIn("Site Configuration", output)
+        self.assertIn("Social Applications", output)
+
+    def test_setup_oauth_management_command(self):
+        from io import StringIO
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command(
+            "setup_oauth",
+            provider="github",
+            client_id="github-client-id",
+            client_secret="github-client-secret",
+            domain="localhost:8000",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("Created github SocialApp for site localhost:8000", output)
+        app = SocialApp.objects.get(provider="github")
+        self.assertEqual(app.client_id, "github-client-id")
+        self.assertEqual(app.secret, "github-client-secret")
+
+
+

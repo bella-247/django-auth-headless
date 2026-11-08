@@ -6,15 +6,92 @@ This guide configures `django-auth-headless` in an existing Django project.
 
 ```bash
 pip install django-auth-headless
+# or
+uv add django-auth-headless
 ```
 
-In `settings.py`, import the exported values from
-`django_auth_headless.conf`. Keep project-specific values such as
-`SECRET_KEY`, `DEBUG`, `DATABASES`, templates, URLs, static files, hosts,
-password validators, and email delivery in the project.
+In `settings.py`, unpack the modular app and middleware lists, and define the `DJANGO_AUTH` dictionary:
 
-The exported `INSTALLED_APPS` already contains `django_auth_headless`.
-Including it twice can create confusing app and migration behavior.
+```python
+from django_auth_headless.conf import (
+    AUTH_APPS,
+    AUTH_MIDDLEWARE,
+    CORS_MIDDLEWARE,
+)
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sites",
+    # Add your own apps (e.g., custom user model app):
+    # "users",
+    "corsheaders",
+    *AUTH_APPS,
+]
+
+MIDDLEWARE = [
+    CORS_MIDDLEWARE,  # Placed at the top for CORS handling
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    *AUTH_MIDDLEWARE,  # Injects allauth AccountMiddleware & BearerTokenMiddleware
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+# Unified authentication settings
+DJANGO_AUTH = {
+    "FRONTEND_URL": "http://localhost:5173",
+    "MODE": "cross-domain",  # "session" or "cross-domain"
+    "PROVIDERS": ["google", "github"],
+    "EMAIL_VERIFICATION": "mandatory",  # "mandatory" | "optional" | "none"
+    "EMAIL_AUTO_CONNECT": False,        # Prevents OAuth pre-hijacking
+    "ACCESS_TOKEN_LIFETIME_SECONDS": 3600,
+    # "USER_SERIALIZER": "users.serializers.custom_user_serializer",
+}
+```
+
+> **Note:** If you prefer environment variables (`.env`) or importing individual constants, you can also import `from django_auth_headless.conf import *` or individual settings like `ACCOUNT_EMAIL_VERIFICATION`, `SOCIALACCOUNT_PROVIDERS`, etc.
+
+### Security Controls
+
+- **`EMAIL_VERIFICATION`**: Defaults to `"mandatory"`. Ensures new signups verify their email address before logging in or completing headless authentication flows. Can also be set to `"optional"` or `"none"`.
+- **`EMAIL_AUTO_CONNECT`**: Defaults to `False`. Prevents OAuth pre-hijacking attacks where a malicious actor could register a third-party social account with a victim's email and silently link it to an existing unverified local account.
+
+
+### Custom User Models
+
+The package automatically adapts to any `AUTH_USER_MODEL`, including models with:
+- No `username` field (`USERNAME_FIELD = "email"`).
+- Custom email field names (via `get_email_field_name()`).
+- No email field (e.g., phone-number-only authentication).
+
+#### Custom User Serializer Hook
+
+If you want `/api/me` to return additional custom profile fields (like `role`, `avatar`, or `company`), define a serializer function in your project:
+
+```python
+# in users/serializers.py
+from django_auth_headless.serializers import default_user_serializer
+
+def custom_user_serializer(user):
+    data = default_user_serializer(user)
+    data["role"] = getattr(user, "role", "member")
+    data["avatar"] = getattr(user, "avatar_url", "")
+    return data
+```
+
+And point `DJANGO_AUTH_USER_SERIALIZER` to it in `settings.py`:
+
+```python
+DJANGO_AUTH_USER_SERIALIZER = "users.serializers.custom_user_serializer"
+```
 
 Include the URLs:
 

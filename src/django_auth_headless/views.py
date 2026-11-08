@@ -7,13 +7,14 @@ from django.shortcuts import redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from allauth.socialaccount.models import SocialAccount
-
+from .conf import get_setting
 from .models import AccessToken, OAuthHandoffCode
+from .serializers import get_user_payload
 
 
 def _require_cross_domain_mode():
-    if settings.DJANGO_AUTH_MODE != "cross-domain":
+    mode = get_setting("MODE", getattr(settings, "DJANGO_AUTH_MODE", "session"))
+    if mode != "cross-domain":
         return JsonResponse(
             {"detail": "Cross-domain token authentication is not enabled."},
             status=404,
@@ -31,32 +32,16 @@ def _bearer_user(request):
 @require_GET
 def current_user(request):
     user = request.user if request.user.is_authenticated else _bearer_user(request)
-    if user is None:
+    if user is None or not user.is_authenticated:
         return JsonResponse(
             {"detail": "Authentication credentials were not provided."},
             status=401,
         )
 
-    email = user.email
-    if not email:
-        provider_account = (
-            SocialAccount.objects.filter(user=user)
-            .exclude(extra_data__email="")
-            .first()
-        )
-        if provider_account:
-            email = provider_account.extra_data.get("email", "")
-
     return JsonResponse(
         {
             "status": 200,
-            "data": {
-                "user": {
-                    "id": user.pk,
-                    "username": user.get_username(),
-                    "email": email,
-                }
-            },
+            "data": {"user": get_user_payload(user)},
         }
     )
 
@@ -67,12 +52,18 @@ def token_callback(request):
     if mode_error:
         return mode_error
     if not request.user.is_authenticated:
-        return JsonResponse({"detail": "Authentication credentials were not provided."}, status=401)
+        return JsonResponse(
+            {"detail": "Authentication credentials were not provided."},
+            status=401,
+        )
 
     _, raw_code = OAuthHandoffCode.issue(request.user, timedelta(minutes=5))
     query = urlencode({"code": raw_code})
+    frontend_url = get_setting(
+        "FRONTEND_URL", getattr(settings, "DJANGO_AUTH_FRONTEND_URL", "")
+    ).rstrip("/")
     return redirect(
-        f"{settings.DJANGO_AUTH_FRONTEND_URL}/account/provider/callback#{query}"
+        f"{frontend_url}/account/provider/callback#{query}"
     )
 
 
@@ -103,16 +94,20 @@ def exchange_code(request):
             {"detail": "The authorization code is invalid or expired."}, status=400
         )
 
+    lifetime = get_setting(
+        "ACCESS_TOKEN_LIFETIME_SECONDS",
+        getattr(settings, "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS", 3600),
+    )
     _, raw_token = AccessToken.issue(
         user,
-        timedelta(seconds=settings.DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS),
+        timedelta(seconds=lifetime),
     )
     return JsonResponse(
         {
             "status": 200,
             "data": {
                 "access_token": raw_token,
-                "expires_in": settings.DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS,
+                "expires_in": lifetime,
             },
         }
     )

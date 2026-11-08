@@ -43,20 +43,51 @@ Then configure the required settings and URLs described in
 
 ## Configure Django
 
-In `settings.py`, import the package settings from
-`django_auth_headless.conf`:
+In `settings.py`, unpack the modular app and middleware lists, and define `DJANGO_AUTH`:
 
 ```python
-from django_auth_headless.conf import *
+from django_auth_headless.conf import (
+    AUTH_APPS,
+    AUTH_MIDDLEWARE,
+    CORS_MIDDLEWARE,
+)
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sites",
+    # "users",  # Your custom user model app
+    "corsheaders",
+    *AUTH_APPS,
+]
+
+MIDDLEWARE = [
+    CORS_MIDDLEWARE,
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    *AUTH_MIDDLEWARE,  # Injects allauth AccountMiddleware & BearerTokenMiddleware
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+# Unified authentication settings
+DJANGO_AUTH = {
+    "FRONTEND_URL": "http://localhost:5173",
+    "MODE": "cross-domain",  # "session" or "cross-domain"
+    "PROVIDERS": ["google", "github"],
+    "EMAIL_VERIFICATION": "mandatory",  # "mandatory" | "optional" | "none"
+    "EMAIL_AUTO_CONNECT": False,        # Prevents OAuth pre-hijacking
+    "ACCESS_TOKEN_LIFETIME_SECONDS": 3600,
+}
 ```
-
-Keep project-specific `SECRET_KEY`, `DEBUG`, `DATABASES`, `TEMPLATES`,
-`ROOT_URLCONF`, `WSGI_APPLICATION`, `STATIC_URL`, `ALLOWED_HOSTS`, and email
-settings in your project.
-
-The exported `INSTALLED_APPS` already includes `django_auth_headless`, so Django
-discovers the package and its management commands. Do not add it a second
-time.
+```
 
 Add the package URLs:
 

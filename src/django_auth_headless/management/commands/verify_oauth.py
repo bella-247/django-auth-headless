@@ -53,9 +53,12 @@ class Command(BaseCommand):
 
     def _check_social_apps(self) -> bool:
         self.stdout.write("\n2. Social Applications:")
-        providers = build()["SOCIALACCOUNT_PROVIDERS"]
+        providers = (
+            getattr(settings, "SOCIALACCOUNT_PROVIDERS", None)
+            or build()["SOCIALACCOUNT_PROVIDERS"]
+        )
         if not providers:
-            self.stdout.write(self.style.WARNING("   ⚠ No providers configured in env"))
+            self.stdout.write(self.style.WARNING("   ⚠ No providers configured"))
             return True
 
         all_ok = True
