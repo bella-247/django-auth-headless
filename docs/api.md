@@ -20,11 +20,14 @@ Success:
     "user": {
       "id": 1,
       "username": "example",
-      "email": "example@example.com"
+      "email": "example@example.com",
+      "connected_providers": ["google"]
     }
   }
 }
 ```
+
+To customize this payload or return custom user profile fields, configure `DJANGO_AUTH_USER_SERIALIZER` in your `settings.py`.
 
 Unauthenticated requests return HTTP 401.
 

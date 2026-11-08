@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 - 2026-11-09
+
+- **Universal Bearer Token Authentication**: Added `BearerTokenMiddleware` to
+  authenticate `Authorization: Bearer <token>` requests across all views, DRF
+  endpoints, and Django Ninja routes without manual view-level code.
+- **Modular Settings Integration**: Exported `AUTH_APPS`, `AUTH_MIDDLEWARE`, and
+  `CORS_MIDDLEWARE` so developers can unpack them into their own `settings.py`
+  without overwriting custom user apps or custom middlewares.
+- **Custom User Model Resilience**: Made `AuthenticationSocialAccountAdapter`
+  and `/api/me` resilient to any `AUTH_USER_MODEL`, safely handling models
+  without an `email` field, custom email field names, and pre-save signup states.
+- **Connected Providers on `/api/me`**: Added `connected_providers` list to
+  `/api/me` so frontends can easily inspect all linked social accounts.
+- **Pluggable User Serializer Hook**: Added `DJANGO_AUTH_USER_SERIALIZER` setting
+  to allow applications to return custom user profile payloads to frontends.
+- **Modular Architecture**: Extracted serialization logic into `serializers.py`
+  and organized utilities into a structured `utils/` package.
+
 ## 0.2.0 - 2026-11-06
 
 - Added durable documentation for setup, architecture, deployment, API usage,

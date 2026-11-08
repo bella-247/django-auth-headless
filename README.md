@@ -43,20 +43,59 @@ Then configure the required settings and URLs described in
 
 ## Configure Django
 
-In `settings.py`, import the package settings from
-`django_auth_headless.conf`:
+In `settings.py`, unpack the modular app and middleware lists:
 
 ```python
-from django_auth_headless.conf import *
+from django_auth_headless.conf import (
+    AUTH_APPS,
+    AUTH_MIDDLEWARE,
+    CORS_MIDDLEWARE,
+    AUTHENTICATION_BACKENDS,
+    SOCIALACCOUNT_ADAPTER,
+    SOCIALACCOUNT_PROVIDERS,
+    HEADLESS_ONLY,
+    HEADLESS_FRONTEND_URLS,
+    DJANGO_AUTH_MODE,
+    DJANGO_AUTH_FRONTEND_URL,
+    DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS,
+    CORS_ALLOWED_ORIGINS,
+    CORS_ALLOW_CREDENTIALS,
+    CSRF_TRUSTED_ORIGINS,
+    SESSION_COOKIE_SECURE,
+    CSRF_COOKIE_SECURE,
+    SESSION_COOKIE_DOMAIN,
+    SESSION_COOKIE_HTTPONLY,
+    CSRF_COOKIE_HTTPONLY,
+    SESSION_COOKIE_SAMESITE,
+    CSRF_COOKIE_SAMESITE,
+    SITE_ID,
+)
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sites",
+    # "users",  # Your custom user model app
+    "corsheaders",
+    *AUTH_APPS,
+]
+
+MIDDLEWARE = [
+    CORS_MIDDLEWARE,
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    *AUTH_MIDDLEWARE,  # Injects allauth AccountMiddleware & BearerTokenMiddleware
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
 ```
-
-Keep project-specific `SECRET_KEY`, `DEBUG`, `DATABASES`, `TEMPLATES`,
-`ROOT_URLCONF`, `WSGI_APPLICATION`, `STATIC_URL`, `ALLOWED_HOSTS`, and email
-settings in your project.
-
-The exported `INSTALLED_APPS` already includes `django_auth_headless`, so Django
-discovers the package and its management commands. Do not add it a second
-time.
 
 Add the package URLs:
 

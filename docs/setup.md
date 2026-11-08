@@ -6,15 +6,92 @@ This guide configures `django-auth-headless` in an existing Django project.
 
 ```bash
 pip install django-auth-headless
+# or
+uv add django-auth-headless
 ```
 
-In `settings.py`, import the exported values from
-`django_auth_headless.conf`. Keep project-specific values such as
-`SECRET_KEY`, `DEBUG`, `DATABASES`, templates, URLs, static files, hosts,
-password validators, and email delivery in the project.
+In `settings.py`, unpack the modular app and middleware lists so you retain full control over your project's custom apps (e.g. `users.CustomUser`) and middleware ordering:
 
-The exported `INSTALLED_APPS` already contains `django_auth_headless`.
-Including it twice can create confusing app and migration behavior.
+```python
+from django_auth_headless.conf import (
+    AUTH_APPS,
+    AUTH_MIDDLEWARE,
+    CORS_MIDDLEWARE,
+    AUTHENTICATION_BACKENDS,
+    SOCIALACCOUNT_ADAPTER,
+    SOCIALACCOUNT_PROVIDERS,
+    HEADLESS_ONLY,
+    HEADLESS_FRONTEND_URLS,
+    DJANGO_AUTH_MODE,
+    DJANGO_AUTH_FRONTEND_URL,
+    DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS,
+    CORS_ALLOWED_ORIGINS,
+    CORS_ALLOW_CREDENTIALS,
+    CSRF_TRUSTED_ORIGINS,
+    SESSION_COOKIE_SECURE,
+    CSRF_COOKIE_SECURE,
+    SESSION_COOKIE_DOMAIN,
+    SESSION_COOKIE_HTTPONLY,
+    CSRF_COOKIE_HTTPONLY,
+    SESSION_COOKIE_SAMESITE,
+    CSRF_COOKIE_SAMESITE,
+    SITE_ID,
+)
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sites",
+    # Add your own apps (e.g., custom user model app):
+    # "users",
+    "corsheaders",
+    *AUTH_APPS,
+]
+
+MIDDLEWARE = [
+    CORS_MIDDLEWARE,  # Placed at the top for CORS handling
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    *AUTH_MIDDLEWARE,  # Injects allauth AccountMiddleware & BearerTokenMiddleware
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+```
+
+### Custom User Models
+
+The package automatically adapts to any `AUTH_USER_MODEL`, including models with:
+- No `username` field (`USERNAME_FIELD = "email"`).
+- Custom email field names (via `get_email_field_name()`).
+- No email field (e.g., phone-number-only authentication).
+
+#### Custom User Serializer Hook
+
+If you want `/api/me` to return additional custom profile fields (like `role`, `avatar`, or `company`), define a serializer function in your project:
+
+```python
+# in users/serializers.py
+from django_auth_headless.serializers import default_user_serializer
+
+def custom_user_serializer(user):
+    data = default_user_serializer(user)
+    data["role"] = getattr(user, "role", "member")
+    data["avatar"] = getattr(user, "avatar_url", "")
+    return data
+```
+
+And point `DJANGO_AUTH_USER_SERIALIZER` to it in `settings.py`:
+
+```python
+DJANGO_AUTH_USER_SERIALIZER = "users.serializers.custom_user_serializer"
+```
 
 Include the URLs:
 
