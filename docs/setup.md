@@ -10,32 +10,13 @@ pip install django-auth-headless
 uv add django-auth-headless
 ```
 
-In `settings.py`, unpack the modular app and middleware lists so you retain full control over your project's custom apps (e.g. `users.CustomUser`) and middleware ordering:
+In `settings.py`, unpack the modular app and middleware lists, and define the `DJANGO_AUTH` dictionary:
 
 ```python
 from django_auth_headless.conf import (
     AUTH_APPS,
     AUTH_MIDDLEWARE,
     CORS_MIDDLEWARE,
-    AUTHENTICATION_BACKENDS,
-    SOCIALACCOUNT_ADAPTER,
-    SOCIALACCOUNT_PROVIDERS,
-    HEADLESS_ONLY,
-    HEADLESS_FRONTEND_URLS,
-    DJANGO_AUTH_MODE,
-    DJANGO_AUTH_FRONTEND_URL,
-    DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS,
-    CORS_ALLOWED_ORIGINS,
-    CORS_ALLOW_CREDENTIALS,
-    CSRF_TRUSTED_ORIGINS,
-    SESSION_COOKIE_SECURE,
-    CSRF_COOKIE_SECURE,
-    SESSION_COOKIE_DOMAIN,
-    SESSION_COOKIE_HTTPONLY,
-    CSRF_COOKIE_HTTPONLY,
-    SESSION_COOKIE_SAMESITE,
-    CSRF_COOKIE_SAMESITE,
-    SITE_ID,
 )
 
 INSTALLED_APPS = [
@@ -63,7 +44,26 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Unified authentication settings
+DJANGO_AUTH = {
+    "FRONTEND_URL": "http://localhost:5173",
+    "MODE": "cross-domain",  # "session" or "cross-domain"
+    "PROVIDERS": ["google", "github"],
+    "EMAIL_VERIFICATION": "mandatory",  # "mandatory" | "optional" | "none"
+    "EMAIL_AUTO_CONNECT": False,        # Prevents OAuth pre-hijacking
+    "ACCESS_TOKEN_LIFETIME_SECONDS": 3600,
+    # "USER_SERIALIZER": "users.serializers.custom_user_serializer",
+}
 ```
+
+> **Note:** If you prefer environment variables (`.env`) or importing individual constants, you can also import `from django_auth_headless.conf import *` or individual settings like `ACCOUNT_EMAIL_VERIFICATION`, `SOCIALACCOUNT_PROVIDERS`, etc.
+
+### Security Controls
+
+- **`EMAIL_VERIFICATION`**: Defaults to `"mandatory"`. Ensures new signups verify their email address before logging in or completing headless authentication flows. Can also be set to `"optional"` or `"none"`.
+- **`EMAIL_AUTO_CONNECT`**: Defaults to `False`. Prevents OAuth pre-hijacking attacks where a malicious actor could register a third-party social account with a victim's email and silently link it to an existing unverified local account.
+
 
 ### Custom User Models
 

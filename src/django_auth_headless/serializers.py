@@ -3,6 +3,7 @@ from django.utils.module_loading import import_string
 
 from allauth.socialaccount.models import SocialAccount
 
+from .conf import get_setting
 from .utils import get_user_email, get_user_username
 
 def default_user_serializer(user) -> dict:
@@ -34,7 +35,9 @@ def default_user_serializer(user) -> dict:
 
 def get_user_payload(user) -> dict:
     """Return serialized user data using custom serializer if configured, or default."""
-    serializer_setting = getattr(settings, "DJANGO_AUTH_USER_SERIALIZER", None)
+    serializer_setting = get_setting(
+        "USER_SERIALIZER", getattr(settings, "DJANGO_AUTH_USER_SERIALIZER", None)
+    )
     if serializer_setting:
         if isinstance(serializer_setting, str):
             serializer = import_string(serializer_setting)

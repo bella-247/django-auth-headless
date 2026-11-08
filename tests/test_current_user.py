@@ -52,3 +52,14 @@ class CurrentUserEndpointTests(TestCase):
         self.assertEqual(user_data["custom_role"], "admin")
         self.assertEqual(user_data["avatar"], "https://example.com/avatar.png")
 
+    @override_settings(
+        DJANGO_AUTH={"USER_SERIALIZER": sample_custom_serializer}
+    )
+    def test_current_user_uses_serializer_from_django_auth_dict(self):
+        response = self.client.get("/api/me")
+        self.assertEqual(response.status_code, 200)
+        user_data = response.json()["data"]["user"]
+        self.assertEqual(user_data["custom_role"], "admin")
+        self.assertEqual(user_data["avatar"], "https://example.com/avatar.png")
+
+

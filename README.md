@@ -43,32 +43,13 @@ Then configure the required settings and URLs described in
 
 ## Configure Django
 
-In `settings.py`, unpack the modular app and middleware lists:
+In `settings.py`, unpack the modular app and middleware lists, and define `DJANGO_AUTH`:
 
 ```python
 from django_auth_headless.conf import (
     AUTH_APPS,
     AUTH_MIDDLEWARE,
     CORS_MIDDLEWARE,
-    AUTHENTICATION_BACKENDS,
-    SOCIALACCOUNT_ADAPTER,
-    SOCIALACCOUNT_PROVIDERS,
-    HEADLESS_ONLY,
-    HEADLESS_FRONTEND_URLS,
-    DJANGO_AUTH_MODE,
-    DJANGO_AUTH_FRONTEND_URL,
-    DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS,
-    CORS_ALLOWED_ORIGINS,
-    CORS_ALLOW_CREDENTIALS,
-    CSRF_TRUSTED_ORIGINS,
-    SESSION_COOKIE_SECURE,
-    CSRF_COOKIE_SECURE,
-    SESSION_COOKIE_DOMAIN,
-    SESSION_COOKIE_HTTPONLY,
-    CSRF_COOKIE_HTTPONLY,
-    SESSION_COOKIE_SAMESITE,
-    CSRF_COOKIE_SAMESITE,
-    SITE_ID,
 )
 
 INSTALLED_APPS = [
@@ -95,6 +76,17 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Unified authentication settings
+DJANGO_AUTH = {
+    "FRONTEND_URL": "http://localhost:5173",
+    "MODE": "cross-domain",  # "session" or "cross-domain"
+    "PROVIDERS": ["google", "github"],
+    "EMAIL_VERIFICATION": "mandatory",  # "mandatory" | "optional" | "none"
+    "EMAIL_AUTO_CONNECT": False,        # Prevents OAuth pre-hijacking
+    "ACCESS_TOKEN_LIFETIME_SECONDS": 3600,
+}
+```
 ```
 
 Add the package URLs:

@@ -2,6 +2,9 @@
 
 ## 0.3.0 - 2026-11-09
 
+- **Unified `DJANGO_AUTH` Configuration & Security Controls**: Introduced DRF-style
+  `DJANGO_AUTH = { ... }` settings dictionary with secure defaults (`EMAIL_VERIFICATION = "mandatory"`,
+  and `EMAIL_AUTO_CONNECT = False` to prevent OAuth account pre-hijacking attacks).
 - **Universal Bearer Token Authentication**: Added `BearerTokenMiddleware` to
   authenticate `Authorization: Bearer <token>` requests across all views, DRF
   endpoints, and Django Ninja routes without manual view-level code.
