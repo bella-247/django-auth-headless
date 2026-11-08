@@ -3,14 +3,14 @@
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from allauth.socialaccount.models import SocialLogin
 
+from .utils import get_user_email_field
 
 class AuthenticationSocialAccountAdapter(DefaultSocialAccountAdapter):
     """Fill missing local email addresses from the authenticated provider."""
 
     def pre_social_login(self, request, sociallogin: SocialLogin) -> None:
         user = sociallogin.user
-        email_getter = getattr(user, "get_email_field_name", None)
-        email_field = email_getter() if callable(email_getter) else "email"
+        email_field = get_user_email_field(user)
 
         if hasattr(user, email_field):
             current_email = getattr(user, email_field, "")
