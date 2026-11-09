@@ -30,6 +30,7 @@ AUTH_APPS = [
     "allauth.socialaccount.providers.github",
     "allauth.socialaccount.providers.gitlab",
     "allauth.socialaccount.providers.microsoft",
+    "allauth.socialaccount.providers.apple",
     "allauth.headless",
     "corsheaders",
     AUTHENTICATION_PACKAGE,
@@ -67,6 +68,12 @@ PROVIDER_CONFIGS = {
         "client_id_env": "DJANGO_MICROSOFT_CLIENT_ID",
         "client_secret_env": "DJANGO_MICROSOFT_CLIENT_SECRET",
         "scope": ["User.Read", "email"],
+        "auth_params": {},
+    },
+    "apple": {
+        "client_id_env": "DJANGO_APPLE_CLIENT_ID",
+        "client_secret_env": "DJANGO_APPLE_CLIENT_SECRET",
+        "scope": ["name", "email"],
         "auth_params": {},
     },
 }
@@ -128,6 +135,8 @@ def build(
             "EMAIL_AUTO_CONNECT",
             "USER_SERIALIZER",
             "ACCESS_TOKEN_LIFETIME_SECONDS",
+            "REFRESH_TOKEN_LIFETIME_SECONDS",
+            "ROTATE_REFRESH_TOKENS",
         }
         if any(k in env for k in known_config_keys):
             config = env
@@ -155,6 +164,23 @@ def build(
         access_token_lifetime = env_int("DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS", 3600, env)
     if access_token_lifetime < 60:
         raise ValueError("DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS must be at least 60")
+
+    if config and "REFRESH_TOKEN_LIFETIME_SECONDS" in config:
+        refresh_token_lifetime = int(config["REFRESH_TOKEN_LIFETIME_SECONDS"])
+    else:
+        refresh_token_lifetime = env_int(
+            "DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS", 2592000, env
+        )
+    if refresh_token_lifetime < 60:
+        raise ValueError("DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS must be at least 60")
+
+    if config and "ROTATE_REFRESH_TOKENS" in config:
+        rotate_refresh_tokens = bool(config["ROTATE_REFRESH_TOKENS"])
+    else:
+        rotate_refresh_tokens = env_bool(
+            "DJANGO_AUTH_ROTATE_REFRESH_TOKENS", default=True, env=env
+        )
+
 
     if config and "EMAIL_VERIFICATION" in config:
         email_verification = str(config["EMAIL_VERIFICATION"]).strip().lower()
@@ -287,6 +313,8 @@ def build(
         "DJANGO_AUTH_MODE": auth_mode,
         "DJANGO_AUTH_FRONTEND_URL": frontend_url,
         "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS": access_token_lifetime,
+        "DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS": refresh_token_lifetime,
+        "DJANGO_AUTH_ROTATE_REFRESH_TOKENS": rotate_refresh_tokens,
         "ACCOUNT_EMAIL_VERIFICATION": email_verification,
         "ACCOUNT_SIGNUP_FIELDS": signup_fields,
         "SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT": email_auto_connect,
@@ -341,6 +369,12 @@ SOCIALACCOUNT_PROVIDERS = _settings["SOCIALACCOUNT_PROVIDERS"]
 DJANGO_AUTH_FRONTEND_URL = _settings["DJANGO_AUTH_FRONTEND_URL"]
 DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS = _settings[
     "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS"
+]
+DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS = _settings[
+    "DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS"
+]
+DJANGO_AUTH_ROTATE_REFRESH_TOKENS = _settings[
+    "DJANGO_AUTH_ROTATE_REFRESH_TOKENS"
 ]
 ACCOUNT_EMAIL_VERIFICATION = _settings["ACCOUNT_EMAIL_VERIFICATION"]
 ACCOUNT_SIGNUP_FIELDS = _settings["ACCOUNT_SIGNUP_FIELDS"]

@@ -84,6 +84,7 @@ class AuthenticationPackageTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("access_token", response.json()["data"])
+        self.assertIn("refresh_token", response.json()["data"])
 
         second_response = self.client.post(
             "/api/auth/exchange",
@@ -299,6 +300,141 @@ class AuthenticationPackageTests(TestCase):
         app = SocialApp.objects.get(provider="github")
         self.assertEqual(app.client_id, "github-client-id")
         self.assertEqual(app.secret, "github-client-secret")
+
+    def test_refresh_token_endpoint_rotates_tokens(self):
+        from django_auth_headless.models import RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="refresh-user", password="password"
+        )
+        _, raw_refresh = RefreshToken.issue(user, timedelta(days=30))
+
+        # Refresh
+        response = self.client.post(
+            "/api/auth/refresh",
+            data={"refresh_token": raw_refresh},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertIn("access_token", data)
+        self.assertIn("refresh_token", data)
+        self.assertNotEqual(data["refresh_token"], raw_refresh)
+
+        # Authenticate with the new access token
+        me_resp = self.client.get(
+            "/api/me",
+            HTTP_AUTHORIZATION=f"Bearer {data['access_token']}",
+        )
+        self.assertEqual(me_resp.status_code, 200)
+
+        # Old refresh token is now revoked
+        old_resp = self.client.post(
+            "/api/auth/refresh",
+            data={"refresh_token": raw_refresh},
+            content_type="application/json",
+        )
+        self.assertEqual(old_resp.status_code, 401)
+
+    def test_refresh_token_without_rotation(self):
+        from django_auth_headless.models import RefreshToken
+        from django.test import override_settings
+
+        user = get_user_model().objects.create_user(
+            username="no-rotate-user", password="password"
+        )
+        _, raw_refresh = RefreshToken.issue(user, timedelta(days=30))
+
+        with override_settings(
+            DJANGO_AUTH={
+                "MODE": "cross-domain",
+                "ROTATE_REFRESH_TOKENS": False,
+            }
+        ):
+            response = self.client.post(
+                "/api/auth/refresh",
+                data={"refresh_token": raw_refresh},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["data"]["refresh_token"], raw_refresh)
+
+    def test_refresh_token_validation_errors(self):
+        # Missing token
+        r1 = self.client.post(
+            "/api/auth/refresh",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(r1.status_code, 400)
+
+        # Invalid token
+        r2 = self.client.post(
+            "/api/auth/refresh",
+            data={"refresh_token": "nonexistent-token"},
+            content_type="application/json",
+        )
+        self.assertEqual(r2.status_code, 401)
+
+    def test_revoke_refresh_token(self):
+        from django_auth_headless.models import RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="revoke-refresh-user", password="password"
+        )
+        _, raw_refresh = RefreshToken.issue(user, timedelta(days=30))
+
+        # Revoke via POST body
+        revoke_resp = self.client.post(
+            "/api/auth/token/revoke",
+            data={"token": raw_refresh},
+            content_type="application/json",
+        )
+        self.assertEqual(revoke_resp.status_code, 204)
+
+        # Attempt to use revoked refresh token
+        refresh_resp = self.client.post(
+            "/api/auth/refresh",
+            data={"refresh_token": raw_refresh},
+            content_type="application/json",
+        )
+        self.assertEqual(refresh_resp.status_code, 401)
+
+    def test_cleanup_tokens_management_command(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from django_auth_headless.models import AccessToken, OAuthHandoffCode, RefreshToken
+
+        user = get_user_model().objects.create_user(
+            username="cleanup-user", password="password"
+        )
+
+        # Create expired and active tokens
+        AccessToken.issue(user, timedelta(seconds=-10))
+        _, active_access = AccessToken.issue(user, timedelta(hours=1))
+
+        RefreshToken.issue(user, timedelta(seconds=-10))
+        _, active_refresh = RefreshToken.issue(user, timedelta(days=30))
+
+        OAuthHandoffCode.issue(user, timedelta(seconds=-10))
+        _, active_code = OAuthHandoffCode.issue(user, timedelta(minutes=5))
+
+        out = StringIO()
+        call_command("cleanup_tokens", days=0, stdout=out)
+        self.assertIn("Successfully deleted 3 expired token records", out.getvalue())
+
+        # Verify active items remain
+        self.assertIsNotNone(AccessToken.authenticate(active_access))
+        self.assertIsNotNone(RefreshToken.authenticate(active_refresh))
+        self.assertIsNotNone(OAuthHandoffCode.redeem(active_code))
+
+    def test_apple_oauth_provider_support(self):
+        from django_auth_headless.conf import AUTH_APPS, build
+
+        self.assertIn("allauth.socialaccount.providers.apple", AUTH_APPS)
+        settings = build({"DJANGO_AUTH_PROVIDERS": "apple"})
+        self.assertIn("apple", settings["SOCIALACCOUNT_PROVIDERS"])
+
 
 
 

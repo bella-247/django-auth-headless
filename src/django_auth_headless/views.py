@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .conf import get_setting
-from .models import AccessToken, OAuthHandoffCode
+from .models import AccessToken, OAuthHandoffCode, RefreshToken
 from .serializers import get_user_payload
 
 
@@ -98,16 +98,90 @@ def exchange_code(request):
         "ACCESS_TOKEN_LIFETIME_SECONDS",
         getattr(settings, "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS", 3600),
     )
+    refresh_lifetime = get_setting(
+        "REFRESH_TOKEN_LIFETIME_SECONDS",
+        getattr(settings, "DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS", 2592000),
+    )
     _, raw_token = AccessToken.issue(
         user,
         timedelta(seconds=lifetime),
+    )
+    _, raw_refresh_token = RefreshToken.issue(
+        user,
+        timedelta(seconds=refresh_lifetime),
     )
     return JsonResponse(
         {
             "status": 200,
             "data": {
                 "access_token": raw_token,
+                "refresh_token": raw_refresh_token,
                 "expires_in": lifetime,
+            },
+        }
+    )
+
+
+@csrf_exempt
+@require_POST
+def refresh_token(request):
+    mode_error = _require_cross_domain_mode()
+    if mode_error:
+        return mode_error
+
+    import json
+
+    try:
+        payload = json.loads(request.body)
+        raw_refresh = payload["refresh_token"]
+    except (TypeError, ValueError, KeyError):
+        return JsonResponse(
+            {"detail": "A valid refresh token is required."}, status=400
+        )
+
+    if not isinstance(raw_refresh, str) or not raw_refresh:
+        return JsonResponse(
+            {"detail": "A valid refresh token is required."}, status=400
+        )
+
+    token_record = RefreshToken.authenticate(raw_refresh)
+    if token_record is None:
+        return JsonResponse(
+            {"detail": "The refresh token is invalid or expired."}, status=401
+        )
+
+    user = token_record.user
+    rotate = get_setting(
+        "ROTATE_REFRESH_TOKENS",
+        getattr(settings, "DJANGO_AUTH_ROTATE_REFRESH_TOKENS", True),
+    )
+    if rotate:
+        token_record.revoke()
+        refresh_lifetime = get_setting(
+            "REFRESH_TOKEN_LIFETIME_SECONDS",
+            getattr(settings, "DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS", 2592000),
+        )
+        _, new_refresh_token = RefreshToken.issue(
+            user, timedelta(seconds=refresh_lifetime)
+        )
+    else:
+        new_refresh_token = raw_refresh
+
+    access_lifetime = get_setting(
+        "ACCESS_TOKEN_LIFETIME_SECONDS",
+        getattr(settings, "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS", 3600),
+    )
+    _, new_access_token = AccessToken.issue(
+        user, timedelta(seconds=access_lifetime)
+    )
+
+    return JsonResponse(
+        {
+            "status": 200,
+            "data": {
+                "access_token": new_access_token,
+                "refresh_token": new_refresh_token,
+                "expires_in": access_lifetime,
             },
         }
     )
@@ -119,12 +193,35 @@ def revoke_token(request):
     mode_error = _require_cross_domain_mode()
     if mode_error:
         return mode_error
+
+    raw_token = ""
     authorization = request.headers.get("Authorization", "")
-    raw_token = authorization[7:].strip() if authorization.startswith("Bearer ") else ""
-    token = AccessToken.objects.filter(
-        token_hash=AccessToken.hash_token(raw_token),
-        revoked_at__isnull=True,
-    ).first()
-    if token:
-        token.revoke()
+    if authorization.startswith("Bearer "):
+        raw_token = authorization[7:].strip()
+    elif request.body:
+        import json
+
+        try:
+            payload = json.loads(request.body)
+            raw_token = payload.get("token") or payload.get("refresh_token") or ""
+        except (TypeError, ValueError):
+            pass
+
+    if raw_token:
+        token_hash = AccessToken.hash_token(raw_token)
+        access_tok = AccessToken.objects.filter(
+            token_hash=token_hash,
+            revoked_at__isnull=True,
+        ).first()
+        if access_tok:
+            access_tok.revoke()
+
+        refresh_tok = RefreshToken.objects.filter(
+            token_hash=token_hash,
+            revoked_at__isnull=True,
+        ).first()
+        if refresh_tok:
+            refresh_tok.revoke()
+
     return JsonResponse({"status": 204}, status=204)
+

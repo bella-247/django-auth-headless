@@ -81,12 +81,13 @@ MIDDLEWARE = [
 DJANGO_AUTH = {
     "FRONTEND_URL": "http://localhost:5173",
     "MODE": "cross-domain",  # "session" or "cross-domain"
-    "PROVIDERS": ["google", "github"],
+    "PROVIDERS": ["google", "github", "apple"],
     "EMAIL_VERIFICATION": "mandatory",  # "mandatory" | "optional" | "none"
     "EMAIL_AUTO_CONNECT": False,        # Prevents OAuth pre-hijacking
     "ACCESS_TOKEN_LIFETIME_SECONDS": 3600,
+    "REFRESH_TOKEN_LIFETIME_SECONDS": 2592000,  # 30 days
+    "ROTATE_REFRESH_TOKENS": True,
 }
-```
 ```
 
 Add the package URLs:

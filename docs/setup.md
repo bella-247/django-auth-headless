@@ -49,10 +49,12 @@ MIDDLEWARE = [
 DJANGO_AUTH = {
     "FRONTEND_URL": "http://localhost:5173",
     "MODE": "cross-domain",  # "session" or "cross-domain"
-    "PROVIDERS": ["google", "github"],
+    "PROVIDERS": ["google", "github", "apple"],
     "EMAIL_VERIFICATION": "mandatory",  # "mandatory" | "optional" | "none"
     "EMAIL_AUTO_CONNECT": False,        # Prevents OAuth pre-hijacking
     "ACCESS_TOKEN_LIFETIME_SECONDS": 3600,
+    "REFRESH_TOKEN_LIFETIME_SECONDS": 2592000,  # 30 days
+    "ROTATE_REFRESH_TOKENS": True,
     # "USER_SERIALIZER": "users.serializers.custom_user_serializer",
 }
 ```
@@ -132,6 +134,18 @@ http://localhost:8000/accounts/google/login/callback/
 `setup_oauth` creates or updates the database-backed `SocialApp` and links it
 to the Site. The database `SocialApp` is the single provider credential
 source; environment credentials are setup inputs, not a second OAuth app.
+
+## Maintenance & Token Cleanup
+
+Expired access tokens, refresh tokens, and redeemed handoff codes can be cleaned up periodically using the built-in management command:
+
+```bash
+# Purge all expired records immediately:
+python manage.py cleanup_tokens
+
+# Or keep expired records for 7 days before purging:
+python manage.py cleanup_tokens --days 7
+```
 
 ## Separate frontend and backend hosts
 

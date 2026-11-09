@@ -52,7 +52,8 @@ Success:
 {
   "status": 200,
   "data": {
-    "access_token": "opaque-token",
+    "access_token": "opaque-access-token",
+    "refresh_token": "opaque-refresh-token",
     "expires_in": 3600
   }
 }
@@ -61,7 +62,42 @@ Success:
 Invalid or expired codes return HTTP 400. The endpoint returns HTTP 404 when
 `DJANGO_AUTH_MODE=session`.
 
+## `POST /api/auth/refresh` (or `/api/auth/token/refresh`)
+
+Rotates an active refresh token to obtain a fresh access token without re-authenticating.
+
+Request:
+
+```json
+{
+  "refresh_token": "opaque-refresh-token"
+}
+```
+
+Success:
+
+```json
+{
+  "status": 200,
+  "data": {
+    "access_token": "new-opaque-access-token",
+    "refresh_token": "new-rotated-refresh-token",
+    "expires_in": 3600
+  }
+}
+```
+
+Invalid, revoked, or expired refresh tokens return HTTP 401.
+
 ## `POST /api/auth/token/revoke`
 
-Revokes the bearer token in the `Authorization` header and returns HTTP 204.
-The endpoint returns HTTP 404 when `DJANGO_AUTH_MODE=session`.
+Revokes a bearer token in the `Authorization` header, or revokes an access/refresh token passed in the request body:
+
+```json
+{
+  "token": "opaque-token-to-revoke"
+}
+```
+
+Returns HTTP 204 on success. The endpoint returns HTTP 404 when `DJANGO_AUTH_MODE=session`.
+

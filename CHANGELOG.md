@@ -2,6 +2,15 @@
 
 ## 0.3.0 - 2026-11-09
 
+- **Refresh Token Rotation (`POST /api/auth/refresh`)**: Introduced `RefreshToken`
+  model and silent token rotation flow. `/api/auth/exchange` returns both
+  `access_token` and `refresh_token`, allowing frontends to refresh tokens
+  in the background without re-authenticating. Supports automatic rotation via
+  `ROTATE_REFRESH_TOKENS = True`.
+- **Sign in with Apple Support**: Added Apple provider (`allauth.socialaccount.providers.apple`)
+  to default supported providers, enabling iOS App Store Guideline 4.8 compliance.
+- **Token Housekeeping (`manage.py cleanup_tokens`)**: Added maintenance command
+  to purge expired `AccessToken`, `RefreshToken`, and `OAuthHandoffCode` records.
 - **Unified `DJANGO_AUTH` Configuration & Security Controls**: Introduced DRF-style
   `DJANGO_AUTH = { ... }` settings dictionary with secure defaults (`EMAIL_VERIFICATION = "mandatory"`,
   and `EMAIL_AUTO_CONNECT = False` to prevent OAuth account pre-hijacking attacks).
