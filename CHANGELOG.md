@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.1 - 2026-11-10
+
+- **PKCE-Style Code Verifier Protection (RFC 7636)**: Added full Proof Key for Code Exchange (PKCE) support to the cross-domain handoff flow. The frontend can provide a `code_challenge` (S256 or plain) at `/api/auth/callback`; `/api/auth/exchange` then requires the secret in-memory `code_verifier`. Possession of the authorization code alone is completely useless to an attacker. Added optional `ENFORCE_PKCE = True` setting.
+- **Broadened Compatibility Matrix**: Expanded Python support to `>=3.10` (Python 3.10, 3.11, 3.12, 3.13) and Django support to `>=4.2` (Django 4.2 LTS, 5.0, 5.1).
+- **Security Hardening on Bearer Authentication**: Enforced `is_active` validation across `AccessToken.authenticate`, `RefreshToken.authenticate`, `OAuthHandoffCode.redeem`, and `/api/me`. Inactive or deactivated users are immediately blocked from authenticating or refreshing tokens.
+- **Shortened OAuth Handoff Code Lifetime**: Reduced single-use authorization code TTL from 5 minutes to 60 seconds (configurable via `HANDOFF_CODE_LIFETIME_SECONDS`) to minimize replay and intercept exposure.
+- **HTTP Security Headers**: Added `Cache-Control: no-store` on `/api/auth/exchange` and `/api/auth/refresh` to prevent token caching in intermediaries/browsers, and `WWW-Authenticate: Bearer` on 401 responses.
+- **CLI Security Enhancements**:
+  - `setup_oauth`: Masked client secrets on stdout (`*** (hidden)`), enforced strict `0o600` file permissions when writing to `.env`, and added `apple` to supported provider choices.
+  - `verify_oauth`: Dynamically introspects `site.domain` for `HTTP_HOST` and configured `FRONTEND_URL` for `HTTP_ORIGIN` instead of hardcoding `localhost:8000`.
+- **Eliminated Runtime Settings Mutation**: Removed `setattr(settings, ...)` mutation from `AuthenticationConfig.ready()` to prevent silent clobbering of explicit user settings (e.g., `ACCOUNT_EMAIL_VERIFICATION = "none"`). Replaced with read-only Django security system checks.
+- **Strict Boolean Parsing (`to_bool`)**: Fixed boolean inversion bug where string booleans like `"false"` or `"0"` evaluated truthy in Python, ensuring `EMAIL_AUTO_CONNECT`, `ROTATE_REFRESH_TOKENS`, and cookie secure flags are safely parsed.
+- **Resolved Duplicate Application Label Conflict**: Removed `"corsheaders"` from `AUTH_APPS` so projects with `"corsheaders"` in `INSTALLED_APPS` don't encounter `ImproperlyConfigured: duplicate application label: corsheaders`.
+- **Clean Package Distributions**: Excluded development harnesses and internal artifacts from source distributions (`sdist`). Verified via `twine check`.
+
 ## 0.3.0 - 2026-11-09
 
 - **Refresh Token Rotation (`POST /api/auth/refresh`)**: Introduced `RefreshToken`

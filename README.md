@@ -25,7 +25,7 @@ pip install django-auth-headless
 uv add django-auth-headless
 ```
 
-The package requires Django 6.1, django-allauth with the `headless` and
+The package requires Python >=3.10, Django >=4.2, django-allauth with the `headless` and
 `socialaccount` extras, django-cors-headers, and python-dotenv.
 
 ## Quick start
@@ -75,6 +75,11 @@ MIDDLEWARE = [
     *AUTH_MIDDLEWARE,  # Injects allauth AccountMiddleware & BearerTokenMiddleware
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
 # Unified authentication settings

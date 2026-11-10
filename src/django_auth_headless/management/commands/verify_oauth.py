@@ -102,8 +102,25 @@ class Command(BaseCommand):
         self.stdout.write("\n4. Allauth Headless Config Endpoint:")
         try:
             from django.test import Client
-            client = Client(HTTP_HOST="localhost:8000")
-            response = client.get("/_allauth/browser/v1/config", HTTP_ORIGIN="http://localhost:5173")
+            from ...conf import get_setting
+
+            site_domain = "localhost:8000"
+            try:
+                site = get_site()
+                site_domain = site.domain
+            except Exception:
+                pass
+
+            frontend_url = get_setting(
+                "FRONTEND_URL",
+                getattr(settings, "DJANGO_AUTH_FRONTEND_URL", "http://localhost:5173"),
+            )
+
+            client = Client(HTTP_HOST=site_domain)
+            response = client.get(
+                "/_allauth/browser/v1/config",
+                HTTP_ORIGIN=frontend_url,
+            )
 
             if response.status_code != 200:
                 self.stdout.write(self.style.ERROR(f"   ✗ Config endpoint returned {response.status_code}"))

@@ -34,17 +34,31 @@ Unauthenticated requests return HTTP 401.
 ## `GET /api/auth/callback`
 
 When `DJANGO_AUTH_MODE=cross-domain`, the separate-host callback creates a
-five-minute handoff code and redirects to `DJANGO_FRONTEND_URL` using a URL
-fragment. The code is not an access token and can be redeemed only once.
-The endpoint returns HTTP 404 when `DJANGO_AUTH_MODE=session`.
+single-use handoff code (default 60 seconds lifetime) and redirects to
+`DJANGO_FRONTEND_URL` using a URL fragment. The code is not an access token and
+can be redeemed only once.
+
+### PKCE Parameters (RFC 7636)
+You can optionally bind the handoff code to an in-memory client secret:
+- `code_challenge`: Base64URL-encoded SHA256 hash of your frontend verifier.
+- `code_challenge_method`: `S256` (default) or `plain`.
+
+If `DJANGO_AUTH["ENFORCE_PKCE"] = True`, requests without a `code_challenge` return HTTP 400.
 
 ## `POST /api/auth/exchange`
+
+Redeems a single-use authorization code for active access and refresh tokens.
 
 Request:
 
 ```json
-{"code": "one-time-handoff-code"}
+{
+  "code": "one-time-handoff-code",
+  "code_verifier": "secret-stored-only-in-frontend-memory"
+}
 ```
+
+> **Note:** If `code_challenge` was registered at issuance, `code_verifier` is strictly mandatory. Without it, redemption is immediately rejected, rendering stolen authorization codes useless to adversaries.
 
 Success:
 

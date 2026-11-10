@@ -45,6 +45,11 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
 # Unified authentication settings
 DJANGO_AUTH = {
     "FRONTEND_URL": "http://localhost:5173",

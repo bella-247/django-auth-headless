@@ -28,6 +28,27 @@ def load_env_file(
                 target[key] = value
 
 
+def to_bool(value: object, default: bool = False) -> bool:
+    """Parse any value (including string representations) as boolean.
+
+    Raises ValueError if a string value cannot be parsed unambiguously.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        val = value.strip().lower()
+        if val in ("1", "true", "yes", "on", "t"):
+            return True
+        if val in ("0", "false", "no", "off", "f", ""):
+            return False
+        raise ValueError(f"Cannot parse boolean from string: {value!r}")
+    return bool(value)
+
+
 def _get_env(name: str, env: Mapping[str, str] | None) -> str | None:
     """Get value from env mapping or os.environ."""
     if env is not None:

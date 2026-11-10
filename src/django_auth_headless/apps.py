@@ -1,6 +1,45 @@
 """Django app configuration for the authentication module."""
 
 from django.apps import AppConfig
+from django.core.checks import Error, Tags, Warning as CheckWarning, register
+
+
+@register(Tags.security)
+def check_auth_configuration(app_configs, **kwargs):
+    """Validate authentication configuration without mutating settings."""
+    from django.conf import settings
+    from .conf import get_setting
+
+    errors = []
+    if not settings.configured:
+        return errors
+
+    backends = getattr(settings, "AUTHENTICATION_BACKENDS", [])
+    allauth_backend = "allauth.account.auth_backends.AuthenticationBackend"
+    if allauth_backend not in backends:
+        errors.append(
+            CheckWarning(
+                f"{allauth_backend!r} is not in AUTHENTICATION_BACKENDS.",
+                hint="Add it to settings.AUTHENTICATION_BACKENDS for django-allauth to authenticate users.",
+                id="django_auth_headless.W001",
+            )
+        )
+
+    mode = get_setting("MODE", getattr(settings, "DJANGO_AUTH_MODE", "session"))
+    if mode == "cross-domain":
+        frontend_url = get_setting(
+            "FRONTEND_URL", getattr(settings, "DJANGO_AUTH_FRONTEND_URL", "")
+        )
+        if not frontend_url:
+            errors.append(
+                Error(
+                    "DJANGO_AUTH['FRONTEND_URL'] is required when MODE is 'cross-domain'.",
+                    hint="Set FRONTEND_URL in DJANGO_AUTH or DJANGO_FRONTEND_URL in environment.",
+                    id="django_auth_headless.E001",
+                )
+            )
+
+    return errors
 
 
 class AuthenticationConfig(AppConfig):
@@ -9,48 +48,4 @@ class AuthenticationConfig(AppConfig):
     verbose_name = "Authentication"
 
     def ready(self) -> None:
-        try:
-            from django.conf import settings
-        except ImportError:
-            return
-
-        if not settings.configured:
-            return
-
-        user_config = getattr(settings, "DJANGO_AUTH", None)
-        if isinstance(user_config, dict):
-            from .conf import build
-
-            auth_settings = build(config=user_config)
-
-            derived_keys = set()
-            derived_map = {
-                "FRONTEND_URL": ["DJANGO_AUTH_FRONTEND_URL", "HEADLESS_FRONTEND_URLS"],
-                "MODE": ["DJANGO_AUTH_MODE"],
-                "ACCESS_TOKEN_LIFETIME_SECONDS": ["DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS"],
-                "REFRESH_TOKEN_LIFETIME_SECONDS": ["DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS"],
-                "ROTATE_REFRESH_TOKENS": ["DJANGO_AUTH_ROTATE_REFRESH_TOKENS"],
-                "PROVIDERS": ["SOCIALACCOUNT_PROVIDERS"],
-                "EMAIL_VERIFICATION": ["ACCOUNT_EMAIL_VERIFICATION", "ACCOUNT_SIGNUP_FIELDS"],
-                "EMAIL_AUTO_CONNECT": ["SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT"],
-                "USER_SERIALIZER": ["DJANGO_AUTH_USER_SERIALIZER"],
-                "CORS_ALLOWED_ORIGINS": ["CORS_ALLOWED_ORIGINS"],
-                "CSRF_TRUSTED_ORIGINS": ["CSRF_TRUSTED_ORIGINS"],
-                "SESSION_COOKIE_DOMAIN": ["SESSION_COOKIE_DOMAIN"],
-                "SESSION_COOKIE_SECURE": ["SESSION_COOKIE_SECURE"],
-                "CSRF_COOKIE_SECURE": ["CSRF_COOKIE_SECURE"],
-                "SESSION_COOKIE_SAMESITE": ["SESSION_COOKIE_SAMESITE"],
-                "CSRF_COOKIE_SAMESITE": ["CSRF_COOKIE_SAMESITE"],
-            }
-            for cfg_key in user_config:
-                derived_keys.update(derived_map.get(cfg_key, []))
-
-            for key, value in auth_settings.items():
-                if key in derived_keys or not hasattr(settings, key):
-                    setattr(settings, key, value)
-                elif key == "AUTHENTICATION_BACKENDS":
-                    backends = list(getattr(settings, key))
-                    allauth_backend = "allauth.account.auth_backends.AuthenticationBackend"
-                    if allauth_backend not in backends:
-                        backends.append(allauth_backend)
-                        setattr(settings, key, backends)
+        pass

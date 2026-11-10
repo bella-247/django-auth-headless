@@ -8,6 +8,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 from django_auth_headless.conf import (  # noqa: E402
     AUTH_APPS,
     AUTH_MIDDLEWARE,
+    AUTHENTICATION_BACKENDS,
 )
 
 INSTALLED_APPS = [
@@ -18,6 +19,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
+    "corsheaders",
     *AUTH_APPS,
 ]
 MIDDLEWARE = [
@@ -27,6 +29,11 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     *AUTH_MIDDLEWARE,
     "django.contrib.messages.middleware.MessageMiddleware",
+]
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
 DJANGO_AUTH = {

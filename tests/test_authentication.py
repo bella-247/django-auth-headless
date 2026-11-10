@@ -13,8 +13,7 @@ from django_auth_headless.conf import build
 from django_auth_headless.site_helpers import ensure_site
 from django_auth_headless.urls import urlpatterns as auth_urlpatterns
 from django_auth_headless.utils import load_env_file
-from django_auth_headless.models import AccessToken
-from django_auth_headless.models import OAuthHandoffCode
+from django_auth_headless.models import AccessToken, OAuthHandoffCode, RefreshToken
 
 
 class AuthenticationPackageTests(TestCase):
@@ -206,30 +205,26 @@ class AuthenticationPackageTests(TestCase):
             self.assertEqual(get_setting("FRONTEND_URL"), "http://override.test")
             self.assertEqual(get_setting("NON_EXISTENT", default="fallback"), "fallback")
 
-    def test_app_config_ready_populates_settings_from_django_auth(self):
+    def test_app_config_ready_does_not_mutate_settings(self):
         from django.apps import apps
         from django.conf import settings as django_settings
         from django.test import override_settings
 
         app_config = apps.get_app_config("django_auth_headless")
         with override_settings(
+            ACCOUNT_EMAIL_VERIFICATION="none",
             DJANGO_AUTH={
                 "FRONTEND_URL": "http://auto-app.test",
                 "MODE": "cross-domain",
                 "EMAIL_VERIFICATION": "mandatory",
                 "EMAIL_AUTO_CONNECT": False,
                 "PROVIDERS": ["google"],
-            }
+            },
         ):
             # Simulate ready()
             app_config.ready()
-            self.assertEqual(django_settings.ACCOUNT_EMAIL_VERIFICATION, "mandatory")
-            self.assertFalse(django_settings.SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT)
-            self.assertIn("google", django_settings.SOCIALACCOUNT_PROVIDERS)
-            self.assertEqual(
-                django_settings.HEADLESS_FRONTEND_URLS["account_signup"],
-                "http://auto-app.test/account/signup",
-            )
+            # Explicit user setting must NEVER be clobbered by ready()
+            self.assertEqual(django_settings.ACCOUNT_EMAIL_VERIFICATION, "none")
 
     def test_token_callback_uses_django_auth_frontend_url(self):
         from django.test import override_settings
@@ -434,6 +429,242 @@ class AuthenticationPackageTests(TestCase):
         self.assertIn("allauth.socialaccount.providers.apple", AUTH_APPS)
         settings = build({"DJANGO_AUTH_PROVIDERS": "apple"})
         self.assertIn("apple", settings["SOCIALACCOUNT_PROVIDERS"])
+
+    def test_inactive_user_cannot_authenticate_with_bearer_token(self):
+        user = get_user_model().objects.create_user(
+            username="inactive-user", password="password", is_active=False
+        )
+        _, raw_token = AccessToken.issue(user, timedelta(hours=1))
+
+        # Direct model authentication must reject inactive user
+        self.assertIsNone(AccessToken.authenticate(raw_token))
+
+        # Current user endpoint must reject with 401 and WWW-Authenticate header
+        response = self.client.get(
+            "/api/me", HTTP_AUTHORIZATION=f"Bearer {raw_token}"
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.headers.get("WWW-Authenticate"), "Bearer")
+
+    def test_inactive_user_cannot_redeem_handoff_code(self):
+        user = get_user_model().objects.create_user(
+            username="inactive-oauth-user", password="password", is_active=False
+        )
+        _, raw_code = OAuthHandoffCode.issue(user, timedelta(minutes=5))
+        self.assertIsNone(OAuthHandoffCode.redeem(raw_code))
+
+    def test_inactive_user_cannot_refresh_token(self):
+        user = get_user_model().objects.create_user(
+            username="inactive-refresh-user", password="password", is_active=False
+        )
+        _, raw_refresh = RefreshToken.issue(user, timedelta(days=30))
+        self.assertIsNone(RefreshToken.authenticate(raw_refresh))
+
+        response = self.client.post(
+            "/api/auth/refresh",
+            data={"refresh_token": raw_refresh},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.headers.get("WWW-Authenticate"), "Bearer")
+
+    def test_build_parses_string_booleans_safely(self):
+        settings_false = build(
+            config={
+                "EMAIL_AUTO_CONNECT": "false",
+                "ROTATE_REFRESH_TOKENS": "0",
+                "SESSION_COOKIE_SECURE": "no",
+                "CSRF_COOKIE_SECURE": "off",
+            }
+        )
+        self.assertFalse(settings_false["SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT"])
+        self.assertFalse(settings_false["DJANGO_AUTH_ROTATE_REFRESH_TOKENS"])
+        self.assertFalse(settings_false["SESSION_COOKIE_SECURE"])
+        self.assertFalse(settings_false["CSRF_COOKIE_SECURE"])
+
+        settings_true = build(
+            config={
+                "EMAIL_AUTO_CONNECT": "true",
+                "ROTATE_REFRESH_TOKENS": "1",
+                "SESSION_COOKIE_SECURE": "yes",
+                "CSRF_COOKIE_SECURE": "on",
+            }
+        )
+        self.assertTrue(settings_true["SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT"])
+        self.assertTrue(settings_true["DJANGO_AUTH_ROTATE_REFRESH_TOKENS"])
+        self.assertTrue(settings_true["SESSION_COOKIE_SECURE"])
+        self.assertTrue(settings_true["CSRF_COOKIE_SECURE"])
+
+    def test_build_rejects_unknown_config_keys(self):
+        with self.assertRaises(ValueError) as ctx:
+            build(config={"UNRECOGNIZED_OPTION": True})
+        self.assertIn("Unknown DJANGO_AUTH configuration key", str(ctx.exception))
+
+    def test_security_headers_on_token_endpoints(self):
+        user = get_user_model().objects.create_user(
+            username="sec-headers-user", password="password"
+        )
+        _, raw_code = OAuthHandoffCode.issue(user, timedelta(minutes=1))
+
+        # /api/auth/exchange has Cache-Control: no-store
+        resp = self.client.post(
+            "/api/auth/exchange",
+            data={"code": raw_code},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.headers.get("Cache-Control"), "no-store")
+        refresh_token = resp.json()["data"]["refresh_token"]
+
+        # /api/auth/refresh has Cache-Control: no-store
+        refresh_resp = self.client.post(
+            "/api/auth/refresh",
+            data={"refresh_token": refresh_token},
+            content_type="application/json",
+        )
+        self.assertEqual(refresh_resp.status_code, 200)
+        self.assertEqual(refresh_resp.headers.get("Cache-Control"), "no-store")
+
+    def test_setup_oauth_masks_secret_and_secures_env_file(self):
+        import os
+        import stat
+        import tempfile
+        from io import StringIO
+        from django.core.management import call_command
+
+        with tempfile.NamedTemporaryFile("w+", delete=False) as tf:
+            temp_env = tf.name
+
+        try:
+            out = StringIO()
+            call_command(
+                "setup_oauth",
+                provider="google",
+                client_id="my-client-id",
+                client_secret="super-secret-value-12345",
+                domain="api.example.com",
+                env_file=temp_env,
+                stdout=out,
+            )
+            output = out.getvalue()
+            # Must NOT expose client secret in stdout
+            self.assertNotIn("super-secret-value-12345", output)
+            self.assertIn("DJANGO_GOOGLE_CLIENT_SECRET=*** (hidden)", output)
+
+            # File mode must be 0o600
+            file_mode = stat.S_IMODE(os.stat(temp_env).st_mode)
+            self.assertEqual(file_mode, 0o600)
+        finally:
+            if os.path.exists(temp_env):
+                os.remove(temp_env)
+
+    def test_token_callback_issues_60s_handoff_code(self):
+        from django.test import override_settings
+
+        user = get_user_model().objects.create_user(
+            username="ttl-user", password="password"
+        )
+        self.client.force_login(user)
+        with override_settings(
+            DJANGO_AUTH={
+                "MODE": "cross-domain",
+                "FRONTEND_URL": "https://frontend.custom.org",
+            }
+        ):
+            resp = self.client.get("/api/auth/callback")
+            self.assertEqual(resp.status_code, 302)
+            code_record = OAuthHandoffCode.objects.filter(user=user).latest("created_at")
+            remaining = (code_record.expires_at - code_record.created_at).total_seconds()
+            self.assertAlmostEqual(remaining, 60, delta=2)
+
+    def test_verify_pkce_rfc7636_test_vector(self):
+        from django_auth_headless.utils import verify_pkce
+
+        # RFC 7636 Appendix B test vector
+        verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
+        # Correct verifier matches challenge
+        self.assertTrue(verify_pkce(verifier, challenge, "S256"))
+        # Wrong verifier fails
+        self.assertFalse(verify_pkce("wrong-verifier-12345", challenge, "S256"))
+        # Plain method
+        self.assertTrue(verify_pkce("plain-secret", "plain-secret", "plain"))
+        self.assertFalse(verify_pkce("plain-secret", "wrong-secret", "plain"))
+
+    def test_pkce_cross_domain_handoff_exchange(self):
+        from django.test import override_settings
+        import urllib.parse
+
+        user = get_user_model().objects.create_user(
+            username="pkce-user", password="password"
+        )
+        self.client.force_login(user)
+
+        verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
+        with override_settings(
+            DJANGO_AUTH={
+                "MODE": "cross-domain",
+                "FRONTEND_URL": "https://frontend.custom.org",
+            }
+        ):
+            # Callback with code_challenge
+            resp = self.client.get(
+                f"/api/auth/callback?code_challenge={challenge}&code_challenge_method=S256"
+            )
+            self.assertEqual(resp.status_code, 302)
+            location = resp["Location"]
+            raw_code = urllib.parse.parse_qs(location.split("#")[1])["code"][0]
+
+            # Attempt 1: Exchange without code_verifier fails (stolen code by adversary)
+            fail_resp1 = self.client.post(
+                "/api/auth/exchange",
+                data={"code": raw_code},
+                content_type="application/json",
+            )
+            self.assertEqual(fail_resp1.status_code, 400)
+
+            # Attempt 2: Exchange with invalid code_verifier fails
+            fail_resp2 = self.client.post(
+                "/api/auth/exchange",
+                data={"code": raw_code, "code_verifier": "attacker-guess"},
+                content_type="application/json",
+            )
+            self.assertEqual(fail_resp2.status_code, 400)
+
+            # Attempt 3: Exchange with legitimate code_verifier succeeds
+            success_resp = self.client.post(
+                "/api/auth/exchange",
+                data={"code": raw_code, "code_verifier": verifier},
+                content_type="application/json",
+            )
+            self.assertEqual(success_resp.status_code, 200)
+            self.assertIn("access_token", success_resp.json()["data"])
+            self.assertIn("refresh_token", success_resp.json()["data"])
+
+    def test_enforce_pkce_rejects_requests_without_challenge(self):
+        from django.test import override_settings
+
+        user = get_user_model().objects.create_user(
+            username="enforce-pkce-user", password="password"
+        )
+        self.client.force_login(user)
+
+        with override_settings(
+            DJANGO_AUTH={
+                "MODE": "cross-domain",
+                "FRONTEND_URL": "https://frontend.custom.org",
+                "ENFORCE_PKCE": True,
+            }
+        ):
+            # Without code_challenge, request is rejected with 400
+            resp = self.client.get("/api/auth/callback")
+            self.assertEqual(resp.status_code, 400)
+            self.assertIn("code_challenge parameter is required", resp.json()["detail"])
+
+
 
 
 

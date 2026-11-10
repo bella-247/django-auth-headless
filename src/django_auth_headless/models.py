@@ -7,6 +7,8 @@ from django.db import models
 from django.db import transaction
 from django.utils import timezone
 
+from .utils import verify_pkce
+
 
 class AccessToken(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -36,7 +38,9 @@ class AccessToken(models.Model):
             revoked_at__isnull=True,
             expires_at__gt=timezone.now(),
         ).first()
-        return token.user if token else None
+        if token and getattr(token.user, "is_active", True):
+            return token.user
+        return None
 
     def revoke(self):
         self.revoked_at = timezone.now()
@@ -46,30 +50,43 @@ class AccessToken(models.Model):
 class OAuthHandoffCode(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     code_hash = models.CharField(max_length=64, unique=True)
+    code_challenge = models.CharField(max_length=128, blank=True, default="")
+    code_challenge_method = models.CharField(max_length=10, blank=True, default="S256")
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
 
     @classmethod
-    def issue(cls, user, lifetime):
+    def issue(cls, user, lifetime, code_challenge="", code_challenge_method="S256"):
         raw_code = secrets.token_urlsafe(32)
         code = cls.objects.create(
             user=user,
             code_hash=AccessToken.hash_token(raw_code),
+            code_challenge=code_challenge or "",
+            code_challenge_method=code_challenge_method or "S256" if code_challenge else "",
             expires_at=timezone.now() + lifetime,
         )
         return code, raw_code
 
     @classmethod
-    def redeem(cls, raw_code):
+    def redeem(cls, raw_code, code_verifier=None):
         with transaction.atomic():
             code = cls.objects.select_for_update().select_related("user").filter(
                 code_hash=AccessToken.hash_token(raw_code),
                 used_at__isnull=True,
                 expires_at__gt=timezone.now(),
             ).first()
-            if code is None:
+            if code is None or not getattr(code.user, "is_active", True):
                 return None
+
+            # PKCE validation: if a code_challenge was registered at issuance,
+            # code_verifier is mandatory and must match the challenge.
+            if code.code_challenge:
+                if not code_verifier or not verify_pkce(
+                    code_verifier, code.code_challenge, code.code_challenge_method
+                ):
+                    return None
+
             code.used_at = timezone.now()
             code.save(update_fields=["used_at"])
             return code.user
@@ -94,11 +111,14 @@ class RefreshToken(models.Model):
 
     @classmethod
     def authenticate(cls, raw_token):
-        return cls.objects.select_related("user").filter(
+        token = cls.objects.select_related("user").filter(
             token_hash=AccessToken.hash_token(raw_token),
             revoked_at__isnull=True,
             expires_at__gt=timezone.now(),
         ).first()
+        if token and getattr(token.user, "is_active", True):
+            return token
+        return None
 
     def revoke(self):
         self.revoked_at = timezone.now()

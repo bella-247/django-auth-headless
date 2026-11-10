@@ -15,7 +15,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--provider",
             default="google",
-            choices=["google", "github", "gitlab", "microsoft"],
+            choices=["google", "github", "gitlab", "microsoft", "apple"],
             help="OAuth provider to configure (default: google)",
         )
         parser.add_argument(
@@ -28,8 +28,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--domain",
-            default="localhost:8000",
-            help="Site domain for the OAuth callback (default: localhost:8000)",
+            help="Site domain for the OAuth callback (default: current site domain or localhost:8000)",
         )
         parser.add_argument(
             "--name",
@@ -45,6 +44,15 @@ class Command(BaseCommand):
         client_id = options["client_id"] or input(f"{provider.title()} Client ID: ").strip()
         client_secret = options["client_secret"] or getpass(f"{provider.title()} Client Secret: ")
         domain = options["domain"]
+        if not domain:
+            try:
+                from django.contrib.sites.models import Site
+                from django.conf import settings
+                site_id = getattr(settings, "SITE_ID", 1)
+                domain = Site.objects.get(pk=site_id).domain
+            except Exception:
+                domain = "localhost:8000"
+
         name = options["name"] or f"{provider.title()} Auth ({domain})"
         env_file = options["env_file"]
 
@@ -68,7 +76,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Created {provider} SocialApp for site {domain}"))
         self.stdout.write("Add these to your .env:")
         self.stdout.write(f"  DJANGO_{provider.upper()}_CLIENT_ID={client_id}")
-        self.stdout.write(f"  DJANGO_{provider.upper()}_CLIENT_SECRET={client_secret}")
+        self.stdout.write(f"  DJANGO_{provider.upper()}_CLIENT_SECRET=*** (hidden)")
 
         # Optionally update .env file
         if env_file:
@@ -76,7 +84,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Updated {env_file}"))
 
     def _update_env_file(self, env_file: str, provider: str, client_id: str, client_secret: str) -> None:
-        """Update .env file with provider credentials."""
+        """Update .env file with provider credentials and enforce secure permissions."""
+        import os
         from pathlib import Path
 
         path = Path(env_file)
@@ -94,3 +103,7 @@ class Command(BaseCommand):
         lines.append(f"{client_secret_key}={client_secret}")
 
         path.write_text("\n".join(lines) + "\n")
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass

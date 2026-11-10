@@ -17,6 +17,7 @@ from .utils import (
     env_list,
     env_str,
     load_env_file,
+    to_bool,
 )
 
 AUTHENTICATION_PACKAGE = __package__
@@ -32,7 +33,6 @@ AUTH_APPS = [
     "allauth.socialaccount.providers.microsoft",
     "allauth.socialaccount.providers.apple",
     "allauth.headless",
-    "corsheaders",
     AUTHENTICATION_PACKAGE,
 ]
 
@@ -110,6 +110,29 @@ def get_setting(name: str, default: Any = None) -> Any:
     return default
 
 
+KNOWN_CONFIG_KEYS = {
+    "FRONTEND_URL",
+    "MODE",
+    "PROVIDERS",
+    "EMAIL_VERIFICATION",
+    "EMAIL_AUTO_CONNECT",
+    "ENFORCE_PKCE",
+    "HANDOFF_CODE_LIFETIME_SECONDS",
+    "USER_SERIALIZER",
+    "ACCESS_TOKEN_LIFETIME_SECONDS",
+    "REFRESH_TOKEN_LIFETIME_SECONDS",
+    "ROTATE_REFRESH_TOKENS",
+    "SESSION_COOKIE_DOMAIN",
+    "SESSION_COOKIE_SAMESITE",
+    "CSRF_COOKIE_SAMESITE",
+    "SESSION_COOKIE_SECURE",
+    "CSRF_COOKIE_SECURE",
+    "CORS_ALLOWED_ORIGINS",
+    "CSRF_TRUSTED_ORIGINS",
+    "SIGNUP_FIELDS",
+}
+
+
 def build(
     env: Mapping[str, Any] | None = None,
     config: Mapping[str, Any] | None = None,
@@ -127,20 +150,16 @@ def build(
     """
     if config is None and env is not None:
         # Check if caller passed a DJANGO_AUTH dict as the first positional argument
-        known_config_keys = {
-            "FRONTEND_URL",
-            "MODE",
-            "PROVIDERS",
-            "EMAIL_VERIFICATION",
-            "EMAIL_AUTO_CONNECT",
-            "USER_SERIALIZER",
-            "ACCESS_TOKEN_LIFETIME_SECONDS",
-            "REFRESH_TOKEN_LIFETIME_SECONDS",
-            "ROTATE_REFRESH_TOKENS",
-        }
-        if any(k in env for k in known_config_keys):
+        if any(k in env for k in KNOWN_CONFIG_KEYS):
             config = env
             env = None
+
+    if config is not None:
+        unknown_keys = set(config.keys()) - KNOWN_CONFIG_KEYS
+        if unknown_keys:
+            raise ValueError(
+                f"Unknown DJANGO_AUTH configuration key(s): {', '.join(sorted(unknown_keys))}"
+            )
 
     if env is None:
         load_env_file()
@@ -175,12 +194,11 @@ def build(
         raise ValueError("DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS must be at least 60")
 
     if config and "ROTATE_REFRESH_TOKENS" in config:
-        rotate_refresh_tokens = bool(config["ROTATE_REFRESH_TOKENS"])
+        rotate_refresh_tokens = to_bool(config["ROTATE_REFRESH_TOKENS"])
     else:
-        rotate_refresh_tokens = env_bool(
-            "DJANGO_AUTH_ROTATE_REFRESH_TOKENS", default=True, env=env
+        rotate_refresh_tokens = to_bool(
+            env.get("DJANGO_AUTH_ROTATE_REFRESH_TOKENS"), default=True
         )
-
 
     if config and "EMAIL_VERIFICATION" in config:
         email_verification = str(config["EMAIL_VERIFICATION"]).strip().lower()
@@ -192,12 +210,11 @@ def build(
         raise ValueError("EMAIL_VERIFICATION must be 'mandatory', 'optional', or 'none'")
 
     if config and "EMAIL_AUTO_CONNECT" in config:
-        email_auto_connect = bool(config["EMAIL_AUTO_CONNECT"])
+        email_auto_connect = to_bool(config["EMAIL_AUTO_CONNECT"])
     else:
-        email_auto_connect = env_bool(
-            "DJANGO_SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT",
+        email_auto_connect = to_bool(
+            env.get("DJANGO_SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT"),
             default=False,
-            env=env,
         )
 
     user_serializer = None
@@ -234,14 +251,18 @@ def build(
         raise ValueError("DJANGO_CSRF_COOKIE_SAMESITE must be Strict, Lax, or None")
 
     if config and "SESSION_COOKIE_SECURE" in config:
-        session_cookie_secure = bool(config["SESSION_COOKIE_SECURE"])
+        session_cookie_secure = to_bool(config["SESSION_COOKIE_SECURE"])
     else:
-        session_cookie_secure = env_bool("DJANGO_SESSION_COOKIE_SECURE", env=env)
+        session_cookie_secure = to_bool(
+            env.get("DJANGO_SESSION_COOKIE_SECURE"), default=False
+        )
 
     if config and "CSRF_COOKIE_SECURE" in config:
-        csrf_cookie_secure = bool(config["CSRF_COOKIE_SECURE"])
+        csrf_cookie_secure = to_bool(config["CSRF_COOKIE_SECURE"])
     else:
-        csrf_cookie_secure = env_bool("DJANGO_CSRF_COOKIE_SECURE", env=env)
+        csrf_cookie_secure = to_bool(
+            env.get("DJANGO_CSRF_COOKIE_SECURE"), default=False
+        )
 
     if session_cookie_samesite == "None" and not session_cookie_secure:
         raise ValueError(
@@ -344,42 +365,23 @@ def build(
     return result
 
 
-# Load .env and build the actual exported settings
-load_env_file()
-_settings = build()
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+SOCIALACCOUNT_ADAPTER = (
+    f"{AUTHENTICATION_PACKAGE}.adapters.AuthenticationSocialAccountAdapter"
+)
+SITE_ID = 1
+HEADLESS_ONLY = True
 
-# Export auth-specific configuration (developers unpack *AUTH_APPS and *AUTH_MIDDLEWARE)
-AUTHENTICATION_BACKENDS = _settings["AUTHENTICATION_BACKENDS"]
-SOCIALACCOUNT_ADAPTER = _settings["SOCIALACCOUNT_ADAPTER"]
-SITE_ID = _settings["SITE_ID"]
-HEADLESS_ONLY = _settings["HEADLESS_ONLY"]
-DJANGO_AUTH_MODE = _settings["DJANGO_AUTH_MODE"]
-HEADLESS_FRONTEND_URLS = _settings["HEADLESS_FRONTEND_URLS"]
-CORS_ALLOWED_ORIGINS = _settings["CORS_ALLOWED_ORIGINS"]
-CORS_ALLOW_CREDENTIALS = _settings["CORS_ALLOW_CREDENTIALS"]
-CSRF_TRUSTED_ORIGINS = _settings["CSRF_TRUSTED_ORIGINS"]
-SESSION_COOKIE_SECURE = _settings["SESSION_COOKIE_SECURE"]
-CSRF_COOKIE_SECURE = _settings["CSRF_COOKIE_SECURE"]
-SESSION_COOKIE_DOMAIN = _settings["SESSION_COOKIE_DOMAIN"]
-SESSION_COOKIE_HTTPONLY = _settings["SESSION_COOKIE_HTTPONLY"]
-CSRF_COOKIE_HTTPONLY = _settings["CSRF_COOKIE_HTTPONLY"]
-SESSION_COOKIE_SAMESITE = _settings["SESSION_COOKIE_SAMESITE"]
-CSRF_COOKIE_SAMESITE = _settings["CSRF_COOKIE_SAMESITE"]
-SOCIALACCOUNT_PROVIDERS = _settings["SOCIALACCOUNT_PROVIDERS"]
-DJANGO_AUTH_FRONTEND_URL = _settings["DJANGO_AUTH_FRONTEND_URL"]
-DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS = _settings[
-    "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS"
-]
-DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS = _settings[
-    "DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS"
-]
-DJANGO_AUTH_ROTATE_REFRESH_TOKENS = _settings[
-    "DJANGO_AUTH_ROTATE_REFRESH_TOKENS"
-]
-ACCOUNT_EMAIL_VERIFICATION = _settings["ACCOUNT_EMAIL_VERIFICATION"]
-ACCOUNT_SIGNUP_FIELDS = _settings["ACCOUNT_SIGNUP_FIELDS"]
-SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = _settings[
 
-    "SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT"
-]
-DJANGO_AUTH_USER_SERIALIZER = _settings.get("DJANGO_AUTH_USER_SERIALIZER", None)
+def __getattr__(name: str) -> Any:
+    """Lazily resolve legacy exported settings to avoid side-effects at import time."""
+    auth_val = get_setting(name)
+    if auth_val is not None:
+        return auth_val
+    settings_dict = build()
+    if name in settings_dict:
+        return settings_dict[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

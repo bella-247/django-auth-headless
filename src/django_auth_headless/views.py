@@ -32,11 +32,13 @@ def _bearer_user(request):
 @require_GET
 def current_user(request):
     user = request.user if request.user.is_authenticated else _bearer_user(request)
-    if user is None or not user.is_authenticated:
-        return JsonResponse(
+    if user is None or not user.is_authenticated or not getattr(user, "is_active", True):
+        response = JsonResponse(
             {"detail": "Authentication credentials were not provided."},
             status=401,
         )
+        response["WWW-Authenticate"] = "Bearer"
+        return response
 
     return JsonResponse(
         {
@@ -51,13 +53,35 @@ def token_callback(request):
     mode_error = _require_cross_domain_mode()
     if mode_error:
         return mode_error
-    if not request.user.is_authenticated:
+    if not request.user.is_authenticated or not getattr(request.user, "is_active", True):
         return JsonResponse(
             {"detail": "Authentication credentials were not provided."},
             status=401,
         )
 
-    _, raw_code = OAuthHandoffCode.issue(request.user, timedelta(minutes=5))
+    code_challenge = request.GET.get("code_challenge", "").strip()
+    code_challenge_method = request.GET.get("code_challenge_method", "S256").strip()
+
+    enforce_pkce = get_setting(
+        "ENFORCE_PKCE",
+        getattr(settings, "DJANGO_AUTH_ENFORCE_PKCE", False),
+    )
+    if enforce_pkce and not code_challenge:
+        return JsonResponse(
+            {"detail": "A code_challenge parameter is required when PKCE is enforced."},
+            status=400,
+        )
+
+    handoff_ttl = get_setting(
+        "HANDOFF_CODE_LIFETIME_SECONDS",
+        getattr(settings, "DJANGO_AUTH_HANDOFF_CODE_LIFETIME_SECONDS", 60),
+    )
+    _, raw_code = OAuthHandoffCode.issue(
+        request.user,
+        timedelta(seconds=handoff_ttl),
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method,
+    )
     query = urlencode({"code": raw_code})
     frontend_url = get_setting(
         "FRONTEND_URL", getattr(settings, "DJANGO_AUTH_FRONTEND_URL", "")
@@ -78,6 +102,7 @@ def exchange_code(request):
     try:
         payload = json.loads(request.body)
         raw_code = payload["code"]
+        code_verifier = payload.get("code_verifier", None)
     except (TypeError, ValueError, KeyError):
         return JsonResponse(
             {"detail": "A valid authorization code is required."}, status=400
@@ -88,7 +113,7 @@ def exchange_code(request):
             {"detail": "A valid authorization code is required."}, status=400
         )
 
-    user = OAuthHandoffCode.redeem(raw_code)
+    user = OAuthHandoffCode.redeem(raw_code, code_verifier=code_verifier)
     if user is None:
         return JsonResponse(
             {"detail": "The authorization code is invalid or expired."}, status=400
@@ -110,7 +135,7 @@ def exchange_code(request):
         user,
         timedelta(seconds=refresh_lifetime),
     )
-    return JsonResponse(
+    response = JsonResponse(
         {
             "status": 200,
             "data": {
@@ -120,6 +145,8 @@ def exchange_code(request):
             },
         }
     )
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @csrf_exempt
@@ -146,9 +173,11 @@ def refresh_token(request):
 
     token_record = RefreshToken.authenticate(raw_refresh)
     if token_record is None:
-        return JsonResponse(
+        response = JsonResponse(
             {"detail": "The refresh token is invalid or expired."}, status=401
         )
+        response["WWW-Authenticate"] = "Bearer"
+        return response
 
     user = token_record.user
     rotate = get_setting(
@@ -175,7 +204,7 @@ def refresh_token(request):
         user, timedelta(seconds=access_lifetime)
     )
 
-    return JsonResponse(
+    response = JsonResponse(
         {
             "status": 200,
             "data": {
@@ -185,6 +214,8 @@ def refresh_token(request):
             },
         }
     )
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @csrf_exempt
