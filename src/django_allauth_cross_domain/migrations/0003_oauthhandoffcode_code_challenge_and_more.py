@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('django_auth_headless', '0002_refreshtoken'),
+        ('django_allauth_cross_domain', '0002_refreshtoken'),
     ]
 
     operations = [

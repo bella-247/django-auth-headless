@@ -9,11 +9,11 @@ from django.test import TestCase
 
 from allauth.socialaccount.models import SocialApp
 
-from django_auth_headless.conf import build
-from django_auth_headless.site_helpers import ensure_site
-from django_auth_headless.urls import urlpatterns as auth_urlpatterns
-from django_auth_headless.utils import load_env_file
-from django_auth_headless.models import AccessToken, OAuthHandoffCode, RefreshToken
+from django_allauth_cross_domain.conf import build
+from django_allauth_cross_domain.site_helpers import ensure_site
+from django_allauth_cross_domain.urls import urlpatterns as auth_urlpatterns
+from django_allauth_cross_domain.utils import load_env_file
+from django_allauth_cross_domain.models import AccessToken, OAuthHandoffCode, RefreshToken
 
 
 class AuthenticationPackageTests(TestCase):
@@ -197,7 +197,7 @@ class AuthenticationPackageTests(TestCase):
         self.assertNotIn("github", settings["SOCIALACCOUNT_PROVIDERS"])
 
     def test_get_setting_resolves_from_django_auth_dict(self):
-        from django_auth_headless.conf import get_setting
+        from django_allauth_cross_domain.conf import get_setting
         from django.test import override_settings
 
         with override_settings(DJANGO_AUTH={"MODE": "cross-domain", "FRONTEND_URL": "http://override.test"}):
@@ -210,7 +210,7 @@ class AuthenticationPackageTests(TestCase):
         from django.conf import settings as django_settings
         from django.test import override_settings
 
-        app_config = apps.get_app_config("django_auth_headless")
+        app_config = apps.get_app_config("django_allauth_cross_domain")
         with override_settings(
             ACCOUNT_EMAIL_VERIFICATION="none",
             DJANGO_AUTH={
@@ -297,7 +297,7 @@ class AuthenticationPackageTests(TestCase):
         self.assertEqual(app.secret, "github-client-secret")
 
     def test_refresh_token_endpoint_rotates_tokens(self):
-        from django_auth_headless.models import RefreshToken
+        from django_allauth_cross_domain.models import RefreshToken
 
         user = get_user_model().objects.create_user(
             username="refresh-user", password="password"
@@ -332,7 +332,7 @@ class AuthenticationPackageTests(TestCase):
         self.assertEqual(old_resp.status_code, 401)
 
     def test_refresh_token_without_rotation(self):
-        from django_auth_headless.models import RefreshToken
+        from django_allauth_cross_domain.models import RefreshToken
         from django.test import override_settings
 
         user = get_user_model().objects.create_user(
@@ -372,7 +372,7 @@ class AuthenticationPackageTests(TestCase):
         self.assertEqual(r2.status_code, 401)
 
     def test_revoke_refresh_token(self):
-        from django_auth_headless.models import RefreshToken
+        from django_allauth_cross_domain.models import RefreshToken
 
         user = get_user_model().objects.create_user(
             username="revoke-refresh-user", password="password"
@@ -398,7 +398,7 @@ class AuthenticationPackageTests(TestCase):
     def test_cleanup_tokens_management_command(self):
         from io import StringIO
         from django.core.management import call_command
-        from django_auth_headless.models import AccessToken, OAuthHandoffCode, RefreshToken
+        from django_allauth_cross_domain.models import AccessToken, OAuthHandoffCode, RefreshToken
 
         user = get_user_model().objects.create_user(
             username="cleanup-user", password="password"
@@ -424,7 +424,7 @@ class AuthenticationPackageTests(TestCase):
         self.assertIsNotNone(OAuthHandoffCode.redeem(active_code))
 
     def test_apple_oauth_provider_support(self):
-        from django_auth_headless.conf import AUTH_APPS, build
+        from django_allauth_cross_domain.conf import AUTH_APPS, build
 
         self.assertIn("allauth.socialaccount.providers.apple", AUTH_APPS)
         settings = build({"DJANGO_AUTH_PROVIDERS": "apple"})
@@ -578,7 +578,7 @@ class AuthenticationPackageTests(TestCase):
             self.assertAlmostEqual(remaining, 60, delta=2)
 
     def test_verify_pkce_rfc7636_test_vector(self):
-        from django_auth_headless.utils import verify_pkce
+        from django_allauth_cross_domain.utils import verify_pkce
 
         # RFC 7636 Appendix B test vector
         verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
@@ -663,6 +663,99 @@ class AuthenticationPackageTests(TestCase):
             resp = self.client.get("/api/auth/callback")
             self.assertEqual(resp.status_code, 400)
             self.assertIn("code_challenge parameter is required", resp.json()["detail"])
+
+    def test_drf_bearer_token_authentication(self):
+        from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.test import APIRequestFactory
+        from django_allauth_cross_domain.contrib.rest_framework import BearerTokenAuthentication
+
+        user = get_user_model().objects.create_user(
+            username="drf-user", password="password"
+        )
+        _, raw_token = AccessToken.issue(user, timedelta(hours=1))
+
+        factory = APIRequestFactory()
+        authenticator = BearerTokenAuthentication()
+
+        # Non-bearer request returns None
+        req1 = factory.get("/api/test")
+        self.assertIsNone(authenticator.authenticate(req1))
+
+        # Valid bearer token returns (user, token)
+        req2 = factory.get("/api/test", HTTP_AUTHORIZATION=f"Bearer {raw_token}")
+        auth_result = authenticator.authenticate(req2)
+        self.assertIsNotNone(auth_result)
+        self.assertEqual(auth_result[0], user)
+        self.assertEqual(auth_result[1], raw_token)
+        self.assertEqual(authenticator.authenticate_header(req2), "Bearer")
+
+        # Invalid token raises AuthenticationFailed
+        req3 = factory.get("/api/test", HTTP_AUTHORIZATION="Bearer invalid-token-string")
+        with self.assertRaises(AuthenticationFailed):
+            authenticator.authenticate(req3)
+
+    def test_ninja_bearer_auth(self):
+        from django.test import RequestFactory
+        from django_allauth_cross_domain.contrib.ninja import BearerAuth
+
+        user = get_user_model().objects.create_user(
+            username="ninja-user", password="password"
+        )
+        _, raw_token = AccessToken.issue(user, timedelta(hours=1))
+
+        factory = RequestFactory()
+        auth = BearerAuth()
+        req = factory.get("/api/test")
+
+        # Valid token
+        self.assertEqual(auth.authenticate(req, raw_token), user)
+
+        # Invalid token
+        self.assertIsNone(auth.authenticate(req, "invalid-token-string"))
+
+    def test_signal_token_revocation_on_password_change(self):
+        from allauth.account.signals import password_changed
+
+        user = get_user_model().objects.create_user(
+            username="pw-change-user", password="old-password"
+        )
+        _, raw_access = AccessToken.issue(user, timedelta(hours=1))
+        _, raw_refresh = RefreshToken.issue(user, timedelta(days=30))
+
+        # Both tokens are initially valid
+        self.assertIsNotNone(AccessToken.authenticate(raw_access))
+        self.assertIsNotNone(RefreshToken.authenticate(raw_refresh))
+
+        # Fire allauth password_changed signal
+        password_changed.send(sender=user.__class__, request=None, user=user)
+
+        # Both tokens must now be revoked
+        self.assertIsNone(AccessToken.authenticate(raw_access))
+        self.assertIsNone(RefreshToken.authenticate(raw_refresh))
+
+    def test_signal_token_revocation_on_user_deactivation(self):
+        user = get_user_model().objects.create_user(
+            username="deactivate-user", password="password"
+        )
+        _, raw_access = AccessToken.issue(user, timedelta(hours=1))
+        _, raw_refresh = RefreshToken.issue(user, timedelta(days=30))
+
+        self.assertIsNotNone(AccessToken.authenticate(raw_access))
+        self.assertIsNotNone(RefreshToken.authenticate(raw_refresh))
+
+        # Deactivate user and save
+        user.is_active = False
+        user.save()
+
+        # Both tokens must be revoked
+        self.assertIsNone(AccessToken.authenticate(raw_access))
+        self.assertIsNone(RefreshToken.authenticate(raw_refresh))
+
+    def test_models_have_database_indices_on_expires_at(self):
+        self.assertTrue(AccessToken._meta.get_field("expires_at").db_index)
+        self.assertTrue(RefreshToken._meta.get_field("expires_at").db_index)
+        self.assertTrue(OAuthHandoffCode._meta.get_field("expires_at").db_index)
+
 
 
 

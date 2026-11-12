@@ -1,19 +1,19 @@
 # Setup guide
 
-This guide configures `django-auth-headless` in an existing Django project.
+This guide configures `django-allauth-cross-domain` in an existing Django project.
 
 ## Install and configure
 
 ```bash
-pip install django-auth-headless
+pip install django-allauth-cross-domain
 # or
-uv add django-auth-headless
+uv add django-allauth-cross-domain
 ```
 
 In `settings.py`, unpack the modular app and middleware lists, and define the `DJANGO_AUTH` dictionary:
 
 ```python
-from django_auth_headless.conf import (
+from django_allauth_cross_domain.conf import (
     AUTH_APPS,
     AUTH_MIDDLEWARE,
     CORS_MIDDLEWARE,
@@ -64,7 +64,7 @@ DJANGO_AUTH = {
 }
 ```
 
-> **Note:** If you prefer environment variables (`.env`) or importing individual constants, you can also import `from django_auth_headless.conf import *` or individual settings like `ACCOUNT_EMAIL_VERIFICATION`, `SOCIALACCOUNT_PROVIDERS`, etc.
+> **Note:** If you prefer environment variables (`.env`) or importing individual constants, you can also import `from django_allauth_cross_domain.conf import *` or individual settings like `ACCOUNT_EMAIL_VERIFICATION`, `SOCIALACCOUNT_PROVIDERS`, etc.
 
 ### Security Controls
 
@@ -85,7 +85,7 @@ If you want `/api/me` to return additional custom profile fields (like `role`, `
 
 ```python
 # in users/serializers.py
-from django_auth_headless.serializers import default_user_serializer
+from django_allauth_cross_domain.serializers import default_user_serializer
 
 def custom_user_serializer(user):
     data = default_user_serializer(user)
@@ -100,10 +100,39 @@ And point `DJANGO_AUTH_USER_SERIALIZER` to it in `settings.py`:
 DJANGO_AUTH_USER_SERIALIZER = "users.serializers.custom_user_serializer"
 ```
 
+### Framework Integration (DRF & Django Ninja)
+
+#### Django REST Framework (DRF)
+To authenticate API requests in DRF without triggering CSRF failures on mutating requests (POST/PUT/DELETE):
+
+```python
+# settings.py
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "django_allauth_cross_domain.contrib.rest_framework.BearerTokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+}
+```
+
+#### Django Ninja
+To protect Django Ninja endpoints with Bearer tokens:
+
+```python
+from ninja import NinjaAPI
+from django_allauth_cross_domain.contrib.ninja import BearerAuth
+
+api = NinjaAPI(auth=BearerAuth())
+
+@api.get("/protected")
+def protected_view(request):
+    return {"user": request.auth.username}
+```
+
 Include the URLs:
 
 ```python
-from django_auth_headless.urls import urlpatterns as auth_urlpatterns
+from django_allauth_cross_domain.urls import urlpatterns as auth_urlpatterns
 
 urlpatterns = [*auth_urlpatterns]
 ```

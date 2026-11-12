@@ -1,7 +1,7 @@
 [project]
-name = "django-auth-headless"
+name = "django-allauth-cross-domain"
 version = "0.3.0"
-description = "Reusable Django authentication with django-allauth Headless and OAuth providers."
+description = "OAuth cross-domain authentication bridge and bearer tokens for django-allauth Headless."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -34,15 +34,21 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.optional-dependencies]
+drf = ["djangorestframework>=3.14.0"]
+ninja = ["django-ninja>=1.0.0"]
+
 [project.urls]
-Homepage = "https://github.com/bella-247/django-auth-headless"
-Repository = "https://github.com/bella-247/django-auth-headless"
-Issues = "https://github.com/bella-247/django-auth-headless/issues"
-Changelog = "https://github.com/bella-247/django-auth-headless/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/bella-247/django-allauth-cross-domain"
+Repository = "https://github.com/bella-247/django-allauth-cross-domain"
+Issues = "https://github.com/bella-247/django-allauth-cross-domain/issues"
+Changelog = "https://github.com/bella-247/django-allauth-cross-domain/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
     "build>=1.2.2",
+    "django-ninja>=1.8.0",
+    "djangorestframework>=3.18.3",
 ]
 
 [build-system]
@@ -50,7 +56,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/django_auth_headless"]
+packages = ["src/django_allauth_cross_domain"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [

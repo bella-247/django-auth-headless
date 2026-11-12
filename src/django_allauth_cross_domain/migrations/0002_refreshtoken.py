@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('django_auth_headless', '0001_accesstoken'),
+        ('django_allauth_cross_domain', '0001_accesstoken'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

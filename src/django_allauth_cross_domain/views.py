@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -10,6 +11,16 @@ from django.views.decorators.http import require_GET, require_POST
 from .conf import get_setting
 from .models import AccessToken, OAuthHandoffCode, RefreshToken
 from .serializers import get_user_payload
+
+logger = logging.getLogger("django_allauth_cross_domain")
+
+
+def _get_client_ip(request) -> str:
+    """Extract client IP address for security audit logging."""
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
 
 
 def _require_cross_domain_mode():
@@ -33,6 +44,7 @@ def _bearer_user(request):
 def current_user(request):
     user = request.user if request.user.is_authenticated else _bearer_user(request)
     if user is None or not user.is_authenticated or not getattr(user, "is_active", True):
+        logger.debug("Unauthenticated /api/me request from ip=%s", _get_client_ip(request))
         response = JsonResponse(
             {"detail": "Authentication credentials were not provided."},
             status=401,
@@ -54,6 +66,10 @@ def token_callback(request):
     if mode_error:
         return mode_error
     if not request.user.is_authenticated or not getattr(request.user, "is_active", True):
+        logger.warning(
+            "Unauthenticated /api/auth/callback request from ip=%s",
+            _get_client_ip(request),
+        )
         return JsonResponse(
             {"detail": "Authentication credentials were not provided."},
             status=401,
@@ -67,6 +83,10 @@ def token_callback(request):
         getattr(settings, "DJANGO_AUTH_ENFORCE_PKCE", False),
     )
     if enforce_pkce and not code_challenge:
+        logger.warning(
+            "Rejected callback from ip=%s: code_challenge is required when PKCE is enforced",
+            _get_client_ip(request),
+        )
         return JsonResponse(
             {"detail": "A code_challenge parameter is required when PKCE is enforced."},
             status=400,
@@ -115,9 +135,19 @@ def exchange_code(request):
 
     user = OAuthHandoffCode.redeem(raw_code, code_verifier=code_verifier)
     if user is None:
+        logger.warning(
+            "Rejected code exchange from ip=%s: invalid/expired code or PKCE verifier mismatch",
+            _get_client_ip(request),
+        )
         return JsonResponse(
             {"detail": "The authorization code is invalid or expired."}, status=400
         )
+
+    logger.info(
+        "Successfully exchanged authorization code for user_id=%s from ip=%s",
+        user.pk,
+        _get_client_ip(request),
+    )
 
     lifetime = get_setting(
         "ACCESS_TOKEN_LIFETIME_SECONDS",
@@ -173,6 +203,10 @@ def refresh_token(request):
 
     token_record = RefreshToken.authenticate(raw_refresh)
     if token_record is None:
+        logger.warning(
+            "Rejected token refresh attempt from ip=%s: token invalid, expired, or revoked",
+            _get_client_ip(request),
+        )
         response = JsonResponse(
             {"detail": "The refresh token is invalid or expired."}, status=401
         )
@@ -202,6 +236,12 @@ def refresh_token(request):
     )
     _, new_access_token = AccessToken.issue(
         user, timedelta(seconds=access_lifetime)
+    )
+
+    logger.info(
+        "Refreshed access token for user_id=%s from ip=%s",
+        user.pk,
+        _get_client_ip(request),
     )
 
     response = JsonResponse(
@@ -246,6 +286,11 @@ def revoke_token(request):
         ).first()
         if access_tok:
             access_tok.revoke()
+            logger.info(
+                "Revoked access token for user_id=%s from ip=%s",
+                access_tok.user_id,
+                _get_client_ip(request),
+            )
 
         refresh_tok = RefreshToken.objects.filter(
             token_hash=token_hash,
@@ -253,6 +298,11 @@ def revoke_token(request):
         ).first()
         if refresh_tok:
             refresh_tok.revoke()
+            logger.info(
+                "Revoked refresh token for user_id=%s from ip=%s",
+                refresh_tok.user_id,
+                _get_client_ip(request),
+            )
 
     return JsonResponse({"status": 204}, status=204)
 

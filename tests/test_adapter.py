@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 from django.test import TestCase
 
-from django_auth_headless.adapters import AuthenticationSocialAccountAdapter
+from django_allauth_cross_domain.adapters import AuthenticationSocialAccountAdapter
 
 
 class MockUserWithoutEmail:

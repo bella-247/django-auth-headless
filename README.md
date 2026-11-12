@@ -1,18 +1,17 @@
-# django-auth-headless
+# django-allauth-cross-domain
 
-Reusable Django authentication built on django-allauth Headless.
+OAuth cross-domain authentication bridge and bearer tokens for django-allauth Headless.
 
-`django-auth-headless` makes OAuth setup easier for Django applications with a
-browser frontend. It keeps django-allauth as the authentication engine and
-adds guided setup, verification, consistent configuration, and an optional
-secure cross-domain authorization-code exchange.
+`django-allauth-cross-domain` solves OAuth authentication for decoupled architectures
+where the frontend (React, Next.js, Vue, mobile) and Django backend run on separate
+domains. It keeps django-allauth as the authentication engine and adds a secure,
+one-time authorization code exchange with PKCE, refresh token rotation, and bearer token
+authentication for plain Django views, DRF, and Django Ninja.
 
-The package exists because connecting a Django API to a React, Vue, or mobile
-client often requires several unrelated configuration tasks: Sites,
-SocialApps, callback URLs, CORS, CSRF, cookies, and frontend/backend domain
-routing. This project puts those tasks behind a small, documented integration
-surface without taking ownership of the consuming application's users,
-database, or frontend.
+The package exists because connecting a decoupled frontend to a Django API across
+unrelated origins often breaks standard cookie authentication (Safari ITP, cross-origin cookie blocks).
+This library provides a hardened handoff bridge and zero-admin setup tools without taking ownership
+of the consuming application's users or database.
 
 The original learning project, including its React frontend, is available at
 https://github.com/bella-247/DjangoOAuth.
@@ -20,9 +19,13 @@ https://github.com/bella-247/DjangoOAuth.
 ## Install
 
 ```bash
-pip install django-auth-headless
+pip install django-allauth-cross-domain
 # or
-uv add django-auth-headless
+uv add django-allauth-cross-domain
+
+# With DRF or Ninja support:
+pip install "django-allauth-cross-domain[drf]"
+pip install "django-allauth-cross-domain[ninja]"
 ```
 
 The package requires Python >=3.10, Django >=4.2, django-allauth with the `headless` and
@@ -31,7 +34,7 @@ The package requires Python >=3.10, Django >=4.2, django-allauth with the `headl
 ## Quick start
 
 ```bash
-pip install django-auth-headless
+pip install django-allauth-cross-domain
 python manage.py migrate
 python manage.py setup_oauth --provider google
 python manage.py verify_oauth
@@ -46,7 +49,7 @@ Then configure the required settings and URLs described in
 In `settings.py`, unpack the modular app and middleware lists, and define `DJANGO_AUTH`:
 
 ```python
-from django_auth_headless.conf import (
+from django_allauth_cross_domain.conf import (
     AUTH_APPS,
     AUTH_MIDDLEWARE,
     CORS_MIDDLEWARE,
@@ -98,7 +101,7 @@ DJANGO_AUTH = {
 Add the package URLs:
 
 ```python
-from django_auth_headless.urls import urlpatterns as auth_urlpatterns
+from django_allauth_cross_domain.urls import urlpatterns as auth_urlpatterns
 
 urlpatterns = [
     *auth_urlpatterns,

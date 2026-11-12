@@ -5,7 +5,7 @@ ROOT_URLCONF = "tests.urls"
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-from django_auth_headless.conf import (  # noqa: E402
+from django_allauth_cross_domain.conf import (  # noqa: E402
     AUTH_APPS,
     AUTH_MIDDLEWARE,
     AUTHENTICATION_BACKENDS,

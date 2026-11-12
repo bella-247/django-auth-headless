@@ -5,8 +5,8 @@ from django.contrib.auth.models import AnonymousUser
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 
-from django_auth_headless.models import AccessToken
-from django_auth_headless.middleware import BearerTokenMiddleware
+from django_allauth_cross_domain.models import AccessToken
+from django_allauth_cross_domain.middleware import BearerTokenMiddleware
 
 
 class BearerTokenMiddlewareTests(TestCase):

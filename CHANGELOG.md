@@ -2,6 +2,15 @@
 
 ## 0.3.1 - 2026-11-10
 
+- **Package Renaming (`django-allauth-cross-domain`)**: Renamed the package and Python module to `django-allauth-cross-domain` (`django_allauth_cross_domain`) to clearly establish its purpose as the cross-domain OAuth bridge for django-allauth Headless and eliminate confusion with allauth's built-in `headless` module.
+- **Django REST Framework & Django Ninja Contrib Modules**:
+  - `django_allauth_cross_domain.contrib.rest_framework.BearerTokenAuthentication`: Native DRF authenticator that validates Bearer access tokens without triggering DRF's session CSRF checks on mutating requests (POST/PUT/DELETE).
+  - `django_allauth_cross_domain.contrib.ninja.BearerAuth`: Drop-in `HttpBearer` authenticator for Django Ninja endpoints.
+- **Automatic Token Revocation on Password Change & Deactivation**: Added lifecycle signal receivers connected to allauth (`password_changed`, `password_reset`, `password_set`) and Django `post_save` to immediately invalidate all active access and refresh tokens when a user changes their password or is deactivated.
+- **Database Performance & High-Volume Indexing**: Added `db_index=True` to `expires_at` on `AccessToken`, `RefreshToken`, and `OAuthHandoffCode` to prevent sequential table scans during `cleanup_tokens` runs.
+- **Security Audit Logging**: Added structured logging (`logging.getLogger("django_allauth_cross_domain")`) on authentication failures, PKCE verifier mismatches, authorization code exchanges, and token lifecycle events.
+- **PEP 561 Typing Marker (`py.typed`)**: Added type marker file allowing external type checkers (mypy, pyright, ruff) to verify typed consuming code.
+- **Multi-Version GitHub Actions CI Matrix**: Expanded test workflows to test against Python 3.10, 3.11, 3.12, and 3.13.
 - **PKCE-Style Code Verifier Protection (RFC 7636)**: Added full Proof Key for Code Exchange (PKCE) support to the cross-domain handoff flow. The frontend can provide a `code_challenge` (S256 or plain) at `/api/auth/callback`; `/api/auth/exchange` then requires the secret in-memory `code_verifier`. Possession of the authorization code alone is completely useless to an attacker. Added optional `ENFORCE_PKCE = True` setting.
 - **Broadened Compatibility Matrix**: Expanded Python support to `>=3.10` (Python 3.10, 3.11, 3.12, 3.13) and Django support to `>=4.2` (Django 4.2 LTS, 5.0, 5.1).
 - **Security Hardening on Bearer Authentication**: Enforced `is_active` validation across `AccessToken.authenticate`, `RefreshToken.authenticate`, `OAuthHandoffCode.redeem`, and `/api/me`. Inactive or deactivated users are immediately blocked from authenticating or refreshing tokens.

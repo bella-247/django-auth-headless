@@ -21,7 +21,7 @@ def check_auth_configuration(app_configs, **kwargs):
             CheckWarning(
                 f"{allauth_backend!r} is not in AUTHENTICATION_BACKENDS.",
                 hint="Add it to settings.AUTHENTICATION_BACKENDS for django-allauth to authenticate users.",
-                id="django_auth_headless.W001",
+                id="django_allauth_cross_domain.W001",
             )
         )
 
@@ -35,7 +35,7 @@ def check_auth_configuration(app_configs, **kwargs):
                 Error(
                     "DJANGO_AUTH['FRONTEND_URL'] is required when MODE is 'cross-domain'.",
                     hint="Set FRONTEND_URL in DJANGO_AUTH or DJANGO_FRONTEND_URL in environment.",
-                    id="django_auth_headless.E001",
+                    id="django_allauth_cross_domain.E001",
                 )
             )
 
@@ -45,7 +45,9 @@ def check_auth_configuration(app_configs, **kwargs):
 class AuthenticationConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = __package__
-    verbose_name = "Authentication"
+    verbose_name = "Allauth Cross Domain"
 
     def ready(self) -> None:
-        pass
+        from .signals import register_signals
+
+        register_signals()

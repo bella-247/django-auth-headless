@@ -14,7 +14,7 @@ class AccessToken(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     token_hash = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    expires_at = models.DateTimeField(db_index=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
 
     @classmethod
@@ -46,6 +46,13 @@ class AccessToken(models.Model):
         self.revoked_at = timezone.now()
         self.save(update_fields=["revoked_at"])
 
+    @classmethod
+    def revoke_all_for_user(cls, user):
+        """Revoke all active access tokens for a given user."""
+        return cls.objects.filter(user=user, revoked_at__isnull=True).update(
+            revoked_at=timezone.now()
+        )
+
 
 class OAuthHandoffCode(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -53,7 +60,7 @@ class OAuthHandoffCode(models.Model):
     code_challenge = models.CharField(max_length=128, blank=True, default="")
     code_challenge_method = models.CharField(max_length=10, blank=True, default="S256")
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    expires_at = models.DateTimeField(db_index=True)
     used_at = models.DateTimeField(null=True, blank=True)
 
     @classmethod
@@ -91,12 +98,19 @@ class OAuthHandoffCode(models.Model):
             code.save(update_fields=["used_at"])
             return code.user
 
+    @classmethod
+    def invalidate_all_for_user(cls, user):
+        """Invalidate all unredeemed handoff codes for a given user."""
+        return cls.objects.filter(user=user, used_at__isnull=True).update(
+            used_at=timezone.now()
+        )
+
 
 class RefreshToken(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     token_hash = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    expires_at = models.DateTimeField(db_index=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
 
     @classmethod
@@ -123,4 +137,18 @@ class RefreshToken(models.Model):
     def revoke(self):
         self.revoked_at = timezone.now()
         self.save(update_fields=["revoked_at"])
+
+    @classmethod
+    def revoke_all_for_user(cls, user):
+        """Revoke all active refresh tokens for a given user."""
+        return cls.objects.filter(user=user, revoked_at__isnull=True).update(
+            revoked_at=timezone.now()
+        )
+
+
+def revoke_all_tokens_for_user(user) -> None:
+    """Revoke all active access tokens, refresh tokens, and handoff codes for a user."""
+    AccessToken.revoke_all_for_user(user)
+    RefreshToken.revoke_all_for_user(user)
+    OAuthHandoffCode.invalidate_all_for_user(user)
 
