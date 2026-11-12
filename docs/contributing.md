@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for contributing to `django-auth-headless`.
+Thank you for contributing to `django-allauth-cross-domain`.
 
 ## Before opening an issue
 

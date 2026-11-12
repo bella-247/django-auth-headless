@@ -62,9 +62,13 @@ DJANGO_AUTH = {
     "ROTATE_REFRESH_TOKENS": True,
     # "USER_SERIALIZER": "users.serializers.custom_user_serializer",
 }
+
+# Automatically configure allauth, sites, and CORS/CSRF settings
+from django_allauth_cross_domain.conf import apply_settings
+apply_settings(globals())
 ```
 
-> **Note:** If you prefer environment variables (`.env`) or importing individual constants, you can also import `from django_allauth_cross_domain.conf import *` or individual settings like `ACCOUNT_EMAIL_VERIFICATION`, `SOCIALACCOUNT_PROVIDERS`, etc.
+> **Note:** `apply_settings(globals())` automatically configures `SITE_ID = 1`, `ACCOUNT_EMAIL_VERIFICATION`, `SOCIALACCOUNT_PROVIDERS`, `HEADLESS_ONLY`, and CORS/CSRF origins from `DJANGO_AUTH` and `.env`. Individual constants can also be imported via `from django_allauth_cross_domain.conf import *`.
 
 ### Security Controls
 
@@ -193,7 +197,7 @@ GET  /api/me with Authorization: Bearer <access-token>
 POST /api/auth/token/revoke
 ```
 
-The redirect carries a five-minute, single-use code in the URL fragment. It
+The redirect carries a short-lived, single-use code (default 60 seconds) in the URL fragment. It
 does not carry the reusable access token. The frontend exchanges the code over
 HTTPS and keeps the returned token in memory.
 

@@ -1,17 +1,19 @@
-"""Django REST Framework integration for django-auth-headless."""
+"""Django REST Framework integration for django-allauth-cross-domain."""
 
 try:
     from rest_framework.authentication import BaseAuthentication
     from rest_framework.exceptions import AuthenticationFailed
-except ImportError:  # pragma: no cover
-    BaseAuthentication = object  # type: ignore[misc,assignment]
-    AuthenticationFailed = Exception  # type: ignore[misc,assignment]
+except ImportError as exc:
+    raise ImportError(
+        "djangorestframework is required to use django_allauth_cross_domain.contrib.rest_framework. "
+        "Install it with `pip install django-allauth-cross-domain[drf]`."
+    ) from exc
 
 from ..models import AccessToken
 
 
 class BearerTokenAuthentication(BaseAuthentication):
-    """DRF Authentication class using django-auth-headless AccessTokens.
+    """DRF Authentication class using django-allauth-cross-domain AccessTokens.
 
     Unlike session-based authentication, this authenticator bypasses CSRF checks
     for API requests while authenticating Bearer tokens.
@@ -36,4 +38,3 @@ class BearerTokenAuthentication(BaseAuthentication):
 
     def authenticate_header(self, request):
         return self.keyword
-

@@ -1,7 +1,8 @@
 """Management command to clean up expired authentication tokens and handoff codes."""
 
 from datetime import timedelta
-from django.core.management.base import BaseCommand
+
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from ...models import AccessToken, OAuthHandoffCode, RefreshToken
@@ -20,6 +21,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         days = options["days"]
+        if days < 0:
+            raise CommandError("--days must be a non-negative integer.")
+
         cutoff = timezone.now() - timedelta(days=days)
 
         deleted_access, _ = AccessToken.objects.filter(expires_at__lt=cutoff).delete()
@@ -33,4 +37,3 @@ class Command(BaseCommand):
                 f"({deleted_access} access tokens, {deleted_refresh} refresh tokens, {deleted_codes} handoff codes)."
             )
         )
-

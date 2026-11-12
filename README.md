@@ -182,7 +182,7 @@ access tokens, or personal data in issues, logs, or commits.
 
 Releases are published to PyPI by the `Publish package` GitHub Actions
 workflow when a GitHub Release is published. Configure PyPI Trusted Publishing
-for the `bella-247/django-auth-headless` repository with the `pypi`
+for the `bella-247/django-allauth-cross-domain` repository with the `pypi`
 environment. PyPI versions are immutable, so each release must use a new
 version number.
 

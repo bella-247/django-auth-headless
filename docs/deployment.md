@@ -22,7 +22,7 @@ restrict CORS to the exact frontend origin.
 
 ## Token handling
 
-- Handoff codes expire after five minutes.
+- Handoff codes expire after 60 seconds (configurable via HANDOFF_CODE_LIFETIME_SECONDS).
 - Handoff codes are single-use.
 - Access tokens are stored hashed.
 - Access tokens have a configured lifetime.

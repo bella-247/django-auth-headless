@@ -1,6 +1,6 @@
 # Comparison with existing approaches
 
-`django-auth-headless` is an integration layer, not a replacement for every
+`django-allauth-cross-domain` is an integration layer, not a replacement for every
 authentication library. Its goal is to make the common Django OAuth setup
 path easier and more diagnosable.
 

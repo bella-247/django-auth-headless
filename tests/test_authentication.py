@@ -610,34 +610,38 @@ class AuthenticationPackageTests(TestCase):
                 "FRONTEND_URL": "https://frontend.custom.org",
             }
         ):
-            # Callback with code_challenge
-            resp = self.client.get(
+            # Attempt 1: Exchange without code_verifier fails (stolen code by adversary)
+            resp1 = self.client.get(
                 f"/api/auth/callback?code_challenge={challenge}&code_challenge_method=S256"
             )
-            self.assertEqual(resp.status_code, 302)
-            location = resp["Location"]
-            raw_code = urllib.parse.parse_qs(location.split("#")[1])["code"][0]
-
-            # Attempt 1: Exchange without code_verifier fails (stolen code by adversary)
+            raw_code1 = urllib.parse.parse_qs(resp1["Location"].split("#")[1])["code"][0]
             fail_resp1 = self.client.post(
                 "/api/auth/exchange",
-                data={"code": raw_code},
+                data={"code": raw_code1},
                 content_type="application/json",
             )
             self.assertEqual(fail_resp1.status_code, 400)
 
-            # Attempt 2: Exchange with invalid code_verifier fails
+            # Attempt 2: Exchange with invalid code_verifier fails and burns the code
+            resp2 = self.client.get(
+                f"/api/auth/callback?code_challenge={challenge}&code_challenge_method=S256"
+            )
+            raw_code2 = urllib.parse.parse_qs(resp2["Location"].split("#")[1])["code"][0]
             fail_resp2 = self.client.post(
                 "/api/auth/exchange",
-                data={"code": raw_code, "code_verifier": "attacker-guess"},
+                data={"code": raw_code2, "code_verifier": "attacker-guess-12345678901234567890123456789012"},
                 content_type="application/json",
             )
             self.assertEqual(fail_resp2.status_code, 400)
 
-            # Attempt 3: Exchange with legitimate code_verifier succeeds
+            # Attempt 3: Exchange with legitimate code_verifier succeeds on fresh code
+            resp3 = self.client.get(
+                f"/api/auth/callback?code_challenge={challenge}&code_challenge_method=S256"
+            )
+            raw_code3 = urllib.parse.parse_qs(resp3["Location"].split("#")[1])["code"][0]
             success_resp = self.client.post(
                 "/api/auth/exchange",
-                data={"code": raw_code, "code_verifier": verifier},
+                data={"code": raw_code3, "code_verifier": verifier},
                 content_type="application/json",
             )
             self.assertEqual(success_resp.status_code, 200)

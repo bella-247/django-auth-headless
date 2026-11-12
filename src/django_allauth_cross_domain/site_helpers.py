@@ -6,7 +6,8 @@ from django.contrib.sites.models import Site
 
 def get_site() -> Site:
     """Get the current Site record for SITE_ID."""
-    return Site.objects.get(pk=settings.SITE_ID)
+    site_id = getattr(settings, "SITE_ID", 1)
+    return Site.objects.get(pk=site_id)
 
 
 def ensure_site(domain: str, name: str) -> Site:
@@ -19,8 +20,9 @@ def ensure_site(domain: str, name: str) -> Site:
     Returns:
         The created or updated Site instance
     """
+    site_id = getattr(settings, "SITE_ID", 1)
     site, _ = Site.objects.update_or_create(
-        pk=settings.SITE_ID,
+        pk=site_id,
         defaults={"domain": domain, "name": name},
     )
     return site

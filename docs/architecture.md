@@ -1,6 +1,6 @@
 # Architecture
 
-`django-auth-headless` is a Django integration package. It does not contain a
+`django-allauth-cross-domain` is a Django integration package. It does not contain a
 frontend, user interface, user model, database project, or hosting adapter.
 The consuming application owns those concerns.
 

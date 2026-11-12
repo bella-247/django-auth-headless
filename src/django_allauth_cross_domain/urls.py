@@ -16,7 +16,6 @@ urlpatterns = [
     path("api/me", current_user, name="current_user"),
     path("api/auth/callback", token_callback, name="token_callback"),
     path("api/auth/exchange", exchange_code, name="exchange_code"),
-    path("api/auth/token/refresh", refresh_token, name="refresh_token"),
-    path("api/auth/refresh", refresh_token, name="refresh_token_alias"),
+    path("api/auth/refresh", refresh_token, name="refresh_token"),
     path("api/auth/token/revoke", revoke_token, name="revoke_token"),
 ]

@@ -1,30 +1,26 @@
 """Utility functions for environment variable parsing."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, MutableMapping
+
+from dotenv import dotenv_values
 
 
 def load_env_file(
-    env_file: Path | None = None, env: Mapping[str, str] | None = None
+    env_file: Path | None = None, env: MutableMapping[str, str] | None = None
 ) -> None:
-    """Load .env file if it exists. Safe to call multiple times.
-
-    If `env` is provided, loads into that mapping instead of os.environ.
-    """
+    """Load .env file if it exists using python-dotenv. Safe to call multiple times."""
     target = env if env is not None else os.environ
 
     if env_file is None:
         env_file = Path.cwd() / ".env"
     if env_file.exists():
-        for line in env_file.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key not in target:
+        parsed = dotenv_values(env_file)
+        for key, value in parsed.items():
+            if key and value is not None and key not in target:
                 target[key] = value
 
 
@@ -97,4 +93,3 @@ def env_str(
     """Get environment variable as string."""
     value = _get_env(name, env)
     return value if value is not None else default
-

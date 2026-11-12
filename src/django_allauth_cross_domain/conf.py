@@ -1,12 +1,11 @@
-"""Authentication configuration loaded from environment variables.
+"""Authentication configuration loaded from environment variables and settings.
 
-This is the ONLY file in the authentication package that reads environment
-variables or loads .env files. All other modules import finished values from
-here or from the pure build() function.
-
-The build() function accepts an explicit mapping so tests can pass fake
-environments without mutating os.environ.
+This is the central configuration module for django-allauth-cross-domain.
+Settings can be defined in Django's `settings.py` via `DJANGO_AUTH = { ... }`,
+via individual `DJANGO_AUTH_*` settings, or loaded from environment variables.
 """
+
+from __future__ import annotations
 
 import os
 from typing import Any, Mapping
@@ -43,7 +42,6 @@ AUTH_MIDDLEWARE = [
 
 CORS_MIDDLEWARE = "corsheaders.middleware.CorsMiddleware"
 
-
 # Provider configurations - defines required env vars per provider
 PROVIDER_CONFIGS = {
     "google": {
@@ -78,38 +76,6 @@ PROVIDER_CONFIGS = {
     },
 }
 
-
-def get_setting(name: str, default: Any = None) -> Any:
-    """Resolve an authentication setting from django.conf.settings or default.
-
-    Checks in order:
-    1. settings.DJANGO_AUTH dictionary (e.g. settings.DJANGO_AUTH["MODE"])
-    2. settings.DJANGO_AUTH_{name} (e.g. settings.DJANGO_AUTH_MODE)
-    3. settings.{name} (e.g. settings.ACCOUNT_EMAIL_VERIFICATION)
-    4. default value
-    """
-    try:
-        from django.conf import settings
-
-        if not settings.configured:
-            return default
-    except ImportError:
-        return default
-
-    auth_dict = getattr(settings, "DJANGO_AUTH", None)
-    if isinstance(auth_dict, dict) and name in auth_dict:
-        return auth_dict[name]
-
-    attr_prefixed = f"DJANGO_AUTH_{name}"
-    if hasattr(settings, attr_prefixed):
-        return getattr(settings, attr_prefixed)
-
-    if hasattr(settings, name):
-        return getattr(settings, name)
-
-    return default
-
-
 KNOWN_CONFIG_KEYS = {
     "FRONTEND_URL",
     "MODE",
@@ -118,6 +84,7 @@ KNOWN_CONFIG_KEYS = {
     "EMAIL_AUTO_CONNECT",
     "ENFORCE_PKCE",
     "HANDOFF_CODE_LIFETIME_SECONDS",
+    "TRUST_PROXY_HEADERS",
     "USER_SERIALIZER",
     "ACCESS_TOKEN_LIFETIME_SECONDS",
     "REFRESH_TOKEN_LIFETIME_SECONDS",
@@ -131,6 +98,79 @@ KNOWN_CONFIG_KEYS = {
     "CSRF_TRUSTED_ORIGINS",
     "SIGNUP_FIELDS",
 }
+
+
+def _coerce_setting(name: str, value: Any) -> Any:
+    """Coerce string/environment values into expected Python types."""
+    if value is None:
+        return None
+    if name in {
+        "ACCESS_TOKEN_LIFETIME_SECONDS",
+        "REFRESH_TOKEN_LIFETIME_SECONDS",
+        "HANDOFF_CODE_LIFETIME_SECONDS",
+    }:
+        return int(value)
+    if name in {
+        "ROTATE_REFRESH_TOKENS",
+        "ENFORCE_PKCE",
+        "EMAIL_AUTO_CONNECT",
+        "TRUST_PROXY_HEADERS",
+        "SESSION_COOKIE_SECURE",
+        "CSRF_COOKIE_SECURE",
+    }:
+        return to_bool(value)
+    if name == "MODE":
+        return str(value).strip().lower()
+    if name == "FRONTEND_URL":
+        return str(value).strip().rstrip("/")
+    return value
+
+
+def get_setting(name: str, default: Any = None) -> Any:
+    """Resolve an authentication setting with fallback and type coercion.
+
+    Checks in order:
+    1. settings.DJANGO_AUTH dictionary (e.g. settings.DJANGO_AUTH["MODE"])
+    2. settings.DJANGO_AUTH_{name} (e.g. settings.DJANGO_AUTH_MODE)
+    3. os.environ["DJANGO_AUTH_{name}"] or os.environ["DJANGO_{name}"]
+    4. default value
+    """
+    raw_val = None
+    found = False
+
+    try:
+        from django.conf import settings
+
+        if settings.configured:
+            auth_dict = getattr(settings, "DJANGO_AUTH", None)
+            if isinstance(auth_dict, dict) and name in auth_dict:
+                raw_val = auth_dict[name]
+                found = True
+            else:
+                attr_prefixed = f"DJANGO_AUTH_{name}"
+                if hasattr(settings, attr_prefixed):
+                    raw_val = getattr(settings, attr_prefixed)
+                    found = True
+    except ImportError:
+        pass
+
+    if not found:
+        env_auth_key = f"DJANGO_AUTH_{name}"
+        env_general_key = f"DJANGO_{name}"
+        if env_auth_key in os.environ:
+            raw_val = os.environ[env_auth_key]
+            found = True
+        elif env_general_key in os.environ:
+            raw_val = os.environ[env_general_key]
+            found = True
+
+    if not found:
+        return default
+
+    try:
+        return _coerce_setting(name, raw_val)
+    except (ValueError, TypeError):
+        return default
 
 
 def build(
@@ -149,7 +189,6 @@ def build(
         Dictionary of Django settings ready to use.
     """
     if config is None and env is not None:
-        # Check if caller passed a DJANGO_AUTH dict as the first positional argument
         if any(k in env for k in KNOWN_CONFIG_KEYS):
             config = env
             env = None
@@ -166,9 +205,9 @@ def build(
         env = dict(os.environ)
 
     if config and "FRONTEND_URL" in config:
-        frontend_url = str(config["FRONTEND_URL"]).rstrip("/")
+        frontend_url = str(config["FRONTEND_URL"]).strip().rstrip("/")
     else:
-        frontend_url = env_str("DJANGO_FRONTEND_URL", "", env).rstrip("/")
+        frontend_url = env_str("DJANGO_FRONTEND_URL", "", env).strip().rstrip("/")
 
     if config and "MODE" in config:
         auth_mode = str(config["MODE"]).strip().lower()
@@ -198,6 +237,27 @@ def build(
     else:
         rotate_refresh_tokens = to_bool(
             env.get("DJANGO_AUTH_ROTATE_REFRESH_TOKENS"), default=True
+        )
+
+    if config and "ENFORCE_PKCE" in config:
+        enforce_pkce = to_bool(config["ENFORCE_PKCE"])
+    else:
+        enforce_pkce = to_bool(env.get("DJANGO_AUTH_ENFORCE_PKCE"), default=False)
+
+    if config and "HANDOFF_CODE_LIFETIME_SECONDS" in config:
+        handoff_code_lifetime = int(config["HANDOFF_CODE_LIFETIME_SECONDS"])
+    else:
+        handoff_code_lifetime = env_int(
+            "DJANGO_AUTH_HANDOFF_CODE_LIFETIME_SECONDS", 60, env
+        )
+    if handoff_code_lifetime < 1:
+        raise ValueError("DJANGO_AUTH_HANDOFF_CODE_LIFETIME_SECONDS must be at least 1")
+
+    if config and "TRUST_PROXY_HEADERS" in config:
+        trust_proxy_headers = to_bool(config["TRUST_PROXY_HEADERS"])
+    else:
+        trust_proxy_headers = to_bool(
+            env.get("DJANGO_AUTH_TRUST_PROXY_HEADERS"), default=False
         )
 
     if config and "EMAIL_VERIFICATION" in config:
@@ -288,26 +348,39 @@ def build(
         providers_str = env_str("DJANGO_AUTH_PROVIDERS", "google", env)
         enabled_providers = [p.strip().lower() for p in providers_str.split(",") if p.strip()]
 
-    # Build SOCIALACCOUNT_PROVIDERS dynamically
+    # Validate provider names and build SOCIALACCOUNT_PROVIDERS
     socialaccount_providers = {}
     for provider in enabled_providers:
         if provider not in PROVIDER_CONFIGS:
-            continue
+            raise ValueError(
+                f"Unsupported OAuth provider: '{provider}'. Supported providers are: {', '.join(sorted(PROVIDER_CONFIGS.keys()))}"
+            )
         cfg = PROVIDER_CONFIGS[provider]
         socialaccount_providers[provider] = {
             "SCOPE": cfg["scope"],
             "AUTH_PARAMS": cfg["auth_params"],
         }
 
+    # Split string origins if provided as comma-separated strings
     if config and "CORS_ALLOWED_ORIGINS" in config:
         raw_cors = config["CORS_ALLOWED_ORIGINS"]
-        cors_allowed_origins = list(raw_cors) if isinstance(raw_cors, (list, tuple, set)) else [str(raw_cors)]
+        if isinstance(raw_cors, str):
+            cors_allowed_origins = [o.strip() for o in raw_cors.split(",") if o.strip()]
+        elif isinstance(raw_cors, (list, tuple, set)):
+            cors_allowed_origins = [str(o).strip() for o in raw_cors if str(o).strip()]
+        else:
+            cors_allowed_origins = [str(raw_cors)]
     else:
         cors_allowed_origins = env_list("DJANGO_CORS_ALLOWED_ORIGINS", env=env)
 
     if config and "CSRF_TRUSTED_ORIGINS" in config:
         raw_csrf = config["CSRF_TRUSTED_ORIGINS"]
-        csrf_trusted_origins = list(raw_csrf) if isinstance(raw_csrf, (list, tuple, set)) else [str(raw_csrf)]
+        if isinstance(raw_csrf, str):
+            csrf_trusted_origins = [o.strip() for o in raw_csrf.split(",") if o.strip()]
+        elif isinstance(raw_csrf, (list, tuple, set)):
+            csrf_trusted_origins = [str(o).strip() for o in raw_csrf if str(o).strip()]
+        else:
+            csrf_trusted_origins = [str(raw_csrf)]
     else:
         csrf_trusted_origins = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", env=env)
 
@@ -336,6 +409,9 @@ def build(
         "DJANGO_ACCESS_TOKEN_LIFETIME_SECONDS": access_token_lifetime,
         "DJANGO_REFRESH_TOKEN_LIFETIME_SECONDS": refresh_token_lifetime,
         "DJANGO_AUTH_ROTATE_REFRESH_TOKENS": rotate_refresh_tokens,
+        "DJANGO_AUTH_ENFORCE_PKCE": enforce_pkce,
+        "DJANGO_AUTH_HANDOFF_CODE_LIFETIME_SECONDS": handoff_code_lifetime,
+        "DJANGO_AUTH_TRUST_PROXY_HEADERS": trust_proxy_headers,
         "ACCOUNT_EMAIL_VERIFICATION": email_verification,
         "ACCOUNT_SIGNUP_FIELDS": signup_fields,
         "SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT": email_auto_connect,
@@ -365,6 +441,21 @@ def build(
     return result
 
 
+def apply_settings(
+    target_globals: dict[str, Any] | None = None,
+    config: Mapping[str, Any] | None = None,
+    env: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build authentication settings and apply them to target namespace (e.g. globals())."""
+    settings_dict = build(env=env, config=config)
+    if target_globals is not None:
+        target_globals.update(settings_dict)
+    return settings_dict
+
+
+configure_auth = apply_settings
+
+# Module-level static exports
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
     "allauth.account.auth_backends.AuthenticationBackend",
@@ -374,10 +465,35 @@ SOCIALACCOUNT_ADAPTER = (
 )
 SITE_ID = 1
 HEADLESS_ONLY = True
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "SCOPE": PROVIDER_CONFIGS["google"]["scope"],
+        "AUTH_PARAMS": PROVIDER_CONFIGS["google"]["auth_params"],
+    }
+}
+
+__all__ = [
+    "AUTH_APPS",
+    "AUTH_MIDDLEWARE",
+    "CORS_MIDDLEWARE",
+    "AUTHENTICATION_BACKENDS",
+    "SOCIALACCOUNT_ADAPTER",
+    "SITE_ID",
+    "HEADLESS_ONLY",
+    "ACCOUNT_EMAIL_VERIFICATION",
+    "SOCIALACCOUNT_PROVIDERS",
+    "PROVIDER_CONFIGS",
+    "KNOWN_CONFIG_KEYS",
+    "get_setting",
+    "build",
+    "apply_settings",
+    "configure_auth",
+]
 
 
 def __getattr__(name: str) -> Any:
-    """Lazily resolve legacy exported settings to avoid side-effects at import time."""
+    """Lazily resolve remaining exported settings."""
     auth_val = get_setting(name)
     if auth_val is not None:
         return auth_val
